@@ -13,8 +13,8 @@ import org.jd.core.v1.model.javasyntax.type.PrimitiveType;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.declaration.ClassFileFieldDeclaration;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.util.AggregateFieldsUtil;
 import org.jd.core.v1.util.DefaultList;
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
 @SuppressWarnings("unchecked")
 public class AggregateFieldsUtilTest {
@@ -35,7 +35,7 @@ public class AggregateFieldsUtilTest {
 
         AggregateFieldsUtil.aggregate(fields);
 
-        Assert.assertEquals(expected, fields);
+        Assertions.assertEquals(expected, fields);
     }
 
     @Test
@@ -56,7 +56,7 @@ public class AggregateFieldsUtilTest {
 
         AggregateFieldsUtil.aggregate(fields);
 
-        Assert.assertEquals(expected, fields);
+        Assertions.assertEquals(expected, fields);
     }
 
     @Test
@@ -79,7 +79,7 @@ public class AggregateFieldsUtilTest {
 
         AggregateFieldsUtil.aggregate(fields);
 
-        Assert.assertEquals(expected, fields);
+        Assertions.assertEquals(expected, fields);
     }
 
     @Test
@@ -112,7 +112,7 @@ public class AggregateFieldsUtilTest {
 
         AggregateFieldsUtil.aggregate(fields);
 
-        Assert.assertEquals(expected, fields);
+        Assertions.assertEquals(expected, fields);
     }
 
     @Test
@@ -143,6 +143,6 @@ public class AggregateFieldsUtilTest {
 
         AggregateFieldsUtil.aggregate(fields);
 
-        Assert.assertEquals(expected, fields);
+        Assertions.assertEquals(expected, fields);
     }
 }

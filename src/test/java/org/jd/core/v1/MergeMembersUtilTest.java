@@ -15,8 +15,8 @@ import org.jd.core.v1.model.javasyntax.type.PrimitiveType;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.declaration.*;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.util.MergeMembersUtil;
 import org.jd.core.v1.util.DefaultList;
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -31,7 +31,7 @@ public class MergeMembersUtilTest {
 
         MemberDeclarations result = MergeMembersUtil.merge(null, methods, null);
 
-        Assert.assertEquals(methods, result);
+        Assertions.assertEquals(methods, result);
     }
 
     @Test
@@ -41,12 +41,12 @@ public class MergeMembersUtilTest {
 
         MemberDeclarations result = MergeMembersUtil.merge(fields, methods, null);
 
-        Assert.assertEquals(fields.size() + methods.size(), result.size());
-        Assert.assertEquals(10, ((ClassFileMemberDeclaration)result.get(3)).getFirstLineNumber());
-        Assert.assertEquals(11, ((ClassFileMemberDeclaration)result.get(4)).getFirstLineNumber());
-        Assert.assertEquals(20, ((ClassFileMemberDeclaration)result.get(9)).getFirstLineNumber());
-        Assert.assertEquals(21, ((ClassFileMemberDeclaration)result.get(10)).getFirstLineNumber());
-        Assert.assertEquals(30, ((ClassFileMemberDeclaration)result.get(11)).getFirstLineNumber());
+        Assertions.assertEquals(fields.size() + methods.size(), result.size());
+        Assertions.assertEquals(10, ((ClassFileMemberDeclaration)result.get(3)).getFirstLineNumber());
+        Assertions.assertEquals(11, ((ClassFileMemberDeclaration)result.get(4)).getFirstLineNumber());
+        Assertions.assertEquals(20, ((ClassFileMemberDeclaration)result.get(9)).getFirstLineNumber());
+        Assertions.assertEquals(21, ((ClassFileMemberDeclaration)result.get(10)).getFirstLineNumber());
+        Assertions.assertEquals(30, ((ClassFileMemberDeclaration)result.get(11)).getFirstLineNumber());
     }
 
     @Test
@@ -57,14 +57,14 @@ public class MergeMembersUtilTest {
 
         MemberDeclarations result = MergeMembersUtil.merge(fields, methods, innerTypes);
 
-        Assert.assertEquals(fields.size() + methods.size() + innerTypes.size(), result.size());
-        Assert.assertEquals(10, ((ClassFileMemberDeclaration)result.get(3)).getFirstLineNumber());
-        Assert.assertEquals(11, ((ClassFileMemberDeclaration)result.get(4)).getFirstLineNumber());
-        Assert.assertEquals(20, ((ClassFileMemberDeclaration)result.get(9)).getFirstLineNumber());
-        Assert.assertEquals(21, ((ClassFileMemberDeclaration)result.get(10)).getFirstLineNumber());
-        Assert.assertEquals(30, ((ClassFileMemberDeclaration)result.get(11)).getFirstLineNumber());
-        Assert.assertEquals( 0, ((ClassFileMemberDeclaration)result.get(12)).getFirstLineNumber());
-        Assert.assertEquals( 0, ((ClassFileMemberDeclaration)result.get(20)).getFirstLineNumber());
+        Assertions.assertEquals(fields.size() + methods.size() + innerTypes.size(), result.size());
+        Assertions.assertEquals(10, ((ClassFileMemberDeclaration)result.get(3)).getFirstLineNumber());
+        Assertions.assertEquals(11, ((ClassFileMemberDeclaration)result.get(4)).getFirstLineNumber());
+        Assertions.assertEquals(20, ((ClassFileMemberDeclaration)result.get(9)).getFirstLineNumber());
+        Assertions.assertEquals(21, ((ClassFileMemberDeclaration)result.get(10)).getFirstLineNumber());
+        Assertions.assertEquals(30, ((ClassFileMemberDeclaration)result.get(11)).getFirstLineNumber());
+        Assertions.assertEquals( 0, ((ClassFileMemberDeclaration)result.get(12)).getFirstLineNumber());
+        Assertions.assertEquals( 0, ((ClassFileMemberDeclaration)result.get(20)).getFirstLineNumber());
     }
 
     @Test
@@ -75,13 +75,13 @@ public class MergeMembersUtilTest {
 
         MemberDeclarations result = MergeMembersUtil.merge(fields, methods, innerTypes);
 
-        Assert.assertEquals(fields.size() + methods.size() + innerTypes.size(), result.size());
-        Assert.assertEquals(10, ((ClassFileMemberDeclaration)result.get(3)).getFirstLineNumber());
-        Assert.assertEquals(11, ((ClassFileMemberDeclaration)result.get(4)).getFirstLineNumber());
-        Assert.assertEquals(20, ((ClassFileMemberDeclaration)result.get(9)).getFirstLineNumber());
-        Assert.assertEquals(21, ((ClassFileMemberDeclaration)result.get(10)).getFirstLineNumber());
-        Assert.assertEquals(25, ((ClassFileMemberDeclaration)result.get(11)).getFirstLineNumber());
-        Assert.assertEquals(30, ((ClassFileMemberDeclaration)result.get(12)).getFirstLineNumber());
+        Assertions.assertEquals(fields.size() + methods.size() + innerTypes.size(), result.size());
+        Assertions.assertEquals(10, ((ClassFileMemberDeclaration)result.get(3)).getFirstLineNumber());
+        Assertions.assertEquals(11, ((ClassFileMemberDeclaration)result.get(4)).getFirstLineNumber());
+        Assertions.assertEquals(20, ((ClassFileMemberDeclaration)result.get(9)).getFirstLineNumber());
+        Assertions.assertEquals(21, ((ClassFileMemberDeclaration)result.get(10)).getFirstLineNumber());
+        Assertions.assertEquals(25, ((ClassFileMemberDeclaration)result.get(11)).getFirstLineNumber());
+        Assertions.assertEquals(30, ((ClassFileMemberDeclaration)result.get(12)).getFirstLineNumber());
     }
 
     @Test
@@ -94,10 +94,10 @@ public class MergeMembersUtilTest {
 
         MemberDeclarations result = MergeMembersUtil.merge(fields, null, null);
 
-        Assert.assertEquals(fields.size(), result.size());
-        Assert.assertEquals(a, result.get(0));
-        Assert.assertEquals(b, result.get(1));
-        Assert.assertEquals(c, result.get(2));
+        Assertions.assertEquals(fields.size(), result.size());
+        Assertions.assertEquals(a, result.get(0));
+        Assertions.assertEquals(b, result.get(1));
+        Assertions.assertEquals(c, result.get(2));
     }
 
     @Test
@@ -110,10 +110,10 @@ public class MergeMembersUtilTest {
 
         MemberDeclarations result = MergeMembersUtil.merge(fields, null, null);
 
-        Assert.assertEquals(fields.size(), result.size());
-        Assert.assertEquals(a, result.get(0));
-        Assert.assertEquals(b, result.get(1));
-        Assert.assertEquals(c, result.get(2));
+        Assertions.assertEquals(fields.size(), result.size());
+        Assertions.assertEquals(a, result.get(0));
+        Assertions.assertEquals(b, result.get(1));
+        Assertions.assertEquals(c, result.get(2));
     }
 
     @Test
@@ -129,13 +129,13 @@ public class MergeMembersUtilTest {
 
         MemberDeclarations result = MergeMembersUtil.merge(fields, null, null);
 
-        Assert.assertEquals(fields.size(), result.size());
-        Assert.assertEquals(a, result.get(0));
-        Assert.assertEquals(b, result.get(1));
-        Assert.assertEquals(c, result.get(2));
-        Assert.assertEquals(d, result.get(3));
-        Assert.assertEquals(e, result.get(4));
-        Assert.assertEquals(f, result.get(5));
+        Assertions.assertEquals(fields.size(), result.size());
+        Assertions.assertEquals(a, result.get(0));
+        Assertions.assertEquals(b, result.get(1));
+        Assertions.assertEquals(c, result.get(2));
+        Assertions.assertEquals(d, result.get(3));
+        Assertions.assertEquals(e, result.get(4));
+        Assertions.assertEquals(f, result.get(5));
     }
 
     @Test
@@ -148,10 +148,10 @@ public class MergeMembersUtilTest {
 
         MemberDeclarations result = MergeMembersUtil.merge(fields, null, null);
 
-        Assert.assertEquals(fields.size(), result.size());
-        Assert.assertEquals(c, result.get(0));
-        Assert.assertEquals(b, result.get(1));
-        Assert.assertEquals(a, result.get(2));
+        Assertions.assertEquals(fields.size(), result.size());
+        Assertions.assertEquals(c, result.get(0));
+        Assertions.assertEquals(b, result.get(1));
+        Assertions.assertEquals(a, result.get(2));
     }
 
     @Test
@@ -167,13 +167,13 @@ public class MergeMembersUtilTest {
 
         MemberDeclarations result = MergeMembersUtil.merge(fields, null, null);
 
-        Assert.assertEquals(fields.size(), result.size());
-        Assert.assertEquals(f, result.get(0));
-        Assert.assertEquals(e, result.get(1));
-        Assert.assertEquals(d, result.get(2));
-        Assert.assertEquals(c, result.get(3));
-        Assert.assertEquals(b, result.get(4));
-        Assert.assertEquals(a, result.get(5));
+        Assertions.assertEquals(fields.size(), result.size());
+        Assertions.assertEquals(f, result.get(0));
+        Assertions.assertEquals(e, result.get(1));
+        Assertions.assertEquals(d, result.get(2));
+        Assertions.assertEquals(c, result.get(3));
+        Assertions.assertEquals(b, result.get(4));
+        Assertions.assertEquals(a, result.get(5));
     }
 
     @Test
@@ -186,10 +186,10 @@ public class MergeMembersUtilTest {
 
         MemberDeclarations result = MergeMembersUtil.merge(fields, null, null);
 
-        Assert.assertEquals(fields.size(), result.size());
-        Assert.assertEquals(b, result.get(0));
-        Assert.assertEquals(c, result.get(1));
-        Assert.assertEquals(a, result.get(2));
+        Assertions.assertEquals(fields.size(), result.size());
+        Assertions.assertEquals(b, result.get(0));
+        Assertions.assertEquals(c, result.get(1));
+        Assertions.assertEquals(a, result.get(2));
     }
 
     @Test
@@ -205,13 +205,13 @@ public class MergeMembersUtilTest {
 
         MemberDeclarations result = MergeMembersUtil.merge(fields, null, null);
 
-        Assert.assertEquals(fields.size(), result.size());
-        Assert.assertEquals(d, result.get(0));
-        Assert.assertEquals(e, result.get(1));
-        Assert.assertEquals(b, result.get(2));
-        Assert.assertEquals(a, result.get(3));
-        Assert.assertEquals(c, result.get(4));
-        Assert.assertEquals(f, result.get(5));
+        Assertions.assertEquals(fields.size(), result.size());
+        Assertions.assertEquals(d, result.get(0));
+        Assertions.assertEquals(e, result.get(1));
+        Assertions.assertEquals(b, result.get(2));
+        Assertions.assertEquals(a, result.get(3));
+        Assertions.assertEquals(c, result.get(4));
+        Assertions.assertEquals(f, result.get(5));
     }
 
     protected DefaultList<ClassFileMemberDeclaration> newFields() {

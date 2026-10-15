@@ -7,14 +7,14 @@
 
 package org.jd.core.v1;
 
-import junit.framework.TestCase;
+import static org.junit.jupiter.api.Assertions.*;
 import org.jd.core.v1.model.javasyntax.type.*;
 import org.jd.core.v1.services.javasyntax.type.visitor.PrintTypeVisitor;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 
-public class TypeTest extends TestCase {
+public class TypeTest {
     @Test
     public void testSimpleClassOrInterfaceType() throws Exception {
         BaseType scoit = new ObjectType("org/project/Test", "org.project.Test", "Test");

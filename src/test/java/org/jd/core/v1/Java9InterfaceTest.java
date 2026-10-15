@@ -7,7 +7,7 @@
 
 package org.jd.core.v1;
 
-import junit.framework.TestCase;
+import static org.junit.jupiter.api.Assertions.*;
 import org.jd.core.v1.api.loader.Loader;
 import org.jd.core.v1.api.printer.Printer;
 import org.jd.core.v1.compiler.CompilerUtil;
@@ -23,13 +23,13 @@ import org.jd.core.v1.service.fragmenter.javasyntaxtojavafragment.JavaSyntaxToJa
 import org.jd.core.v1.service.layouter.LayoutFragmentProcessor;
 import org.jd.core.v1.service.tokenizer.javafragmenttotoken.JavaFragmentToTokenProcessor;
 import org.jd.core.v1.service.writer.WriteTokenProcessor;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.io.InputStream;
 import java.util.Collections;
 import java.util.Map;
 
-public class Java9InterfaceTest extends TestCase {
+public class Java9InterfaceTest {
     protected DeserializeClassFileProcessor deserializer = new DeserializeClassFileProcessor();
     protected ClassFileToJavaSyntaxProcessor converter = new ClassFileToJavaSyntaxProcessor();
     protected JavaSyntaxToJavaFragmentProcessor fragmenter = new JavaSyntaxToJavaFragmentProcessor();
@@ -67,7 +67,7 @@ public class Java9InterfaceTest extends TestCase {
             if (e.getMessage().contains("invalid source release: 1.9")) {
                 System.err.println("testJdk901InterfaceWithDefaultMethods() need a Java SDK 9+");
             } else {
-                assertTrue("Compilation failed: " + e.getMessage(), false);
+                assertTrue(false, "Compilation failed: " + e.getMessage());
             }
         }
     }

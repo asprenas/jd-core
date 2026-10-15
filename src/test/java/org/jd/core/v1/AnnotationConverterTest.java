@@ -7,7 +7,7 @@
 
 package org.jd.core.v1;
 
-import junit.framework.TestCase;
+import static org.junit.jupiter.api.Assertions.*;
 import org.jd.core.v1.loader.ZipLoader;
 import org.jd.core.v1.model.classfile.ClassFile;
 import org.jd.core.v1.model.classfile.attribute.Annotations;
@@ -16,11 +16,11 @@ import org.jd.core.v1.model.message.Message;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.util.AnnotationConverter;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.util.TypeMaker;
 import org.jd.core.v1.service.deserializer.classfile.DeserializeClassFileProcessor;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.io.InputStream;
 
-public class AnnotationConverterTest extends TestCase {
+public class AnnotationConverterTest {
 
     @Test
     @SuppressWarnings("unchecked")

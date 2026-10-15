@@ -7,14 +7,14 @@
 
 package org.jd.core.v1;
 
-import junit.framework.TestCase;
+import static org.junit.jupiter.api.Assertions.*;
 import org.jd.core.v1.model.classfile.attribute.CodeException;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.util.ControlFlowGraphMaker;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 
-public class CodeExceptionComparatorTest extends TestCase {
+public class CodeExceptionComparatorTest {
     @Test
     public void test() throws Exception {
         // CodeException(int index, int startPc, int endPc, int handlerPc, int catchType)

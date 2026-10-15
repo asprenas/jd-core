@@ -7,7 +7,7 @@
 
 package org.jd.core.v1;
 
-import junit.framework.TestCase;
+import static org.junit.jupiter.api.Assertions.*;
 import org.jd.core.v1.api.loader.Loader;
 import org.jd.core.v1.api.printer.Printer;
 import org.jd.core.v1.compiler.CompilerUtil;
@@ -23,7 +23,7 @@ import org.jd.core.v1.service.fragmenter.javasyntaxtojavafragment.JavaSyntaxToJa
 import org.jd.core.v1.service.layouter.LayoutFragmentProcessor;
 import org.jd.core.v1.service.tokenizer.javafragmenttotoken.JavaFragmentToTokenProcessor;
 import org.jd.core.v1.service.writer.WriteTokenProcessor;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.io.FileInputStream;
 import java.io.InputStream;
@@ -31,7 +31,7 @@ import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.Map;
 
-public class JavaEnumTest extends TestCase {
+public class JavaEnumTest {
     protected DeserializeClassFileProcessor deserializer = new DeserializeClassFileProcessor();
     protected ClassFileToJavaSyntaxProcessor converter = new ClassFileToJavaSyntaxProcessor();
     protected JavaSyntaxToJavaFragmentProcessor fragmenter = new JavaSyntaxToJavaFragmentProcessor();

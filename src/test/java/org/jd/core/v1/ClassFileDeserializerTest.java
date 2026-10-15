@@ -7,7 +7,7 @@
 
 package org.jd.core.v1;
 
-import junit.framework.TestCase;
+import static org.junit.jupiter.api.Assertions.*;
 
 import org.jd.core.v1.api.loader.Loader;
 import org.jd.core.v1.api.loader.LoaderException;
@@ -22,11 +22,11 @@ import org.jd.core.v1.model.classfile.constant.ConstantUtf8;
 import org.jd.core.v1.model.message.Message;
 import org.jd.core.v1.service.deserializer.classfile.ClassFileDeserializer;
 import org.jd.core.v1.service.deserializer.classfile.DeserializeClassFileProcessor;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.io.InputStream;
 
-public class ClassFileDeserializerTest extends TestCase {
+public class ClassFileDeserializerTest {
     @Test
     public void testMissingClass() throws Exception {
         class NoOpLoader implements Loader {

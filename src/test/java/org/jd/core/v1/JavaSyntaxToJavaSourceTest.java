@@ -7,7 +7,7 @@
 
 package org.jd.core.v1;
 
-import junit.framework.TestCase;
+import static org.junit.jupiter.api.Assertions.*;
 import org.jd.core.v1.loader.NopLoader;
 import org.jd.core.v1.model.javasyntax.CompilationUnit;
 import org.jd.core.v1.model.javasyntax.declaration.*;
@@ -23,15 +23,15 @@ import org.jd.core.v1.service.fragmenter.javasyntaxtojavafragment.JavaSyntaxToJa
 import org.jd.core.v1.service.layouter.LayoutFragmentProcessor;
 import org.jd.core.v1.service.tokenizer.javafragmenttotoken.JavaFragmentToTokenProcessor;
 import org.jd.core.v1.service.writer.WriteTokenProcessor;
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
 
 @SuppressWarnings("unchecked")
-public class JavaSyntaxToJavaSourceTest extends TestCase {
+public class JavaSyntaxToJavaSourceTest {
 
     protected JavaSyntaxToJavaFragmentProcessor fragmenter = new JavaSyntaxToJavaFragmentProcessor();
     protected LayoutFragmentProcessor layouter = new LayoutFragmentProcessor();
@@ -161,8 +161,8 @@ public class JavaSyntaxToJavaSourceTest extends TestCase {
         System.out.print(source);
         System.out.println("- - - - - - - - ");
 
-        Assert.assertTrue(source.indexOf("/* 22: 22 */") != -1);
-        Assert.assertTrue(source.indexOf("java.lang.System") == -1);
+        Assertions.assertTrue(source.indexOf("/* 22: 22 */") != -1);
+        Assertions.assertTrue(source.indexOf("java.lang.System") == -1);
     }
 
     @Test
@@ -201,11 +201,11 @@ public class JavaSyntaxToJavaSourceTest extends TestCase {
         System.out.print(source);
         System.out.println("- - - - - - - - ");
 
-        Assert.assertTrue(source.indexOf("/*   1:   0 */ package org.jd.core.v1.service.test;") != -1);
-        Assert.assertTrue(source.indexOf("interface InterfaceTest") != -1);
-        Assert.assertTrue(source.indexOf("extends List") != -1);
-        Assert.assertTrue(source.indexOf("<String") != -1);
-        Assert.assertTrue(source.indexOf(", Cloneable") != -1);
+        Assertions.assertTrue(source.indexOf("/*   1:   0 */ package org.jd.core.v1.service.test;") != -1);
+        Assertions.assertTrue(source.indexOf("interface InterfaceTest") != -1);
+        Assertions.assertTrue(source.indexOf("extends List") != -1);
+        Assertions.assertTrue(source.indexOf("<String") != -1);
+        Assertions.assertTrue(source.indexOf(", Cloneable") != -1);
     }
 
     @Test
@@ -251,7 +251,7 @@ public class JavaSyntaxToJavaSourceTest extends TestCase {
         System.out.print(source);
         System.out.println("- - - - - - - - ");
 
-        Assert.assertTrue(source.indexOf(", MONDAY") != -1 || source.indexOf("-->MONDAY") != -1);
+        Assertions.assertTrue(source.indexOf(", MONDAY") != -1 || source.indexOf("-->MONDAY") != -1);
     }
 
     @Test
@@ -604,7 +604,7 @@ public class JavaSyntaxToJavaSourceTest extends TestCase {
         System.out.print(source);
         System.out.println("- - - - - - - - ");
 
-        Assert.assertTrue(source.indexOf("switch (i)") != -1);
+        Assertions.assertTrue(source.indexOf("switch (i)") != -1);
     }
 
     @Test
@@ -660,7 +660,7 @@ public class JavaSyntaxToJavaSourceTest extends TestCase {
         System.out.print(source);
         System.out.println("- - - - - - - - ");
 
-        Assert.assertTrue(source.indexOf("/* bridge */") == -1);
-        Assert.assertTrue(source.indexOf("/* synthetic */") == -1);
+        Assertions.assertTrue(source.indexOf("/* bridge */") == -1);
+        Assertions.assertTrue(source.indexOf("/* synthetic */") == -1);
     }
 }

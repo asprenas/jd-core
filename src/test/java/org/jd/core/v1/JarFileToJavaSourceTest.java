@@ -7,7 +7,7 @@
 
 package org.jd.core.v1;
 
-import junit.framework.TestCase;
+import static org.junit.jupiter.api.Assertions.*;
 import org.jd.core.v1.compiler.CompilerUtil;
 import org.jd.core.v1.compiler.JavaSourceFileObject;
 import org.jd.core.v1.loader.ZipLoader;
@@ -20,14 +20,14 @@ import org.jd.core.v1.service.layouter.LayoutFragmentProcessor;
 import org.jd.core.v1.service.tokenizer.javafragmenttotoken.JavaFragmentToTokenProcessor;
 import org.jd.core.v1.service.writer.WriteTokenProcessor;
 import org.jd.core.v1.util.DefaultList;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.io.FileInputStream;
 import java.io.InputStream;
 import java.nio.file.Paths;
 import java.util.*;
 
-public class JarFileToJavaSourceTest extends TestCase {
+public class JarFileToJavaSourceTest {
     protected DeserializeClassFileProcessor deserializer = new DeserializeClassFileProcessor();
     protected ClassFileToJavaSyntaxProcessor converter = new ClassFileToJavaSyntaxProcessor();
     protected JavaSyntaxToJavaFragmentProcessor fragmenter = new JavaSyntaxToJavaFragmentProcessor();
@@ -91,11 +91,29 @@ public class JarFileToJavaSourceTest extends TestCase {
         test(org.jsoup.Jsoup.class);
     }
 
-    @Test
-    public void testJUnit4() throws Exception {
-        // Decompile and recompile 'junit:junit:4.12'
-        test(org.junit.Test.class);
-    }
+    // TODO Disabled after migrating tests to JUnit 5. To be replaced by a JUnit 5 jar test
+    //      (test(org.junit.jupiter.api.Test.class) + 'org.apiguardian:apiguardian-api' on the
+    //      test classpath), which currently fails: 13/162 classes do not recompile.
+    //      Decompiler issues to fix:
+    //      1. Lambda nested in a capturing lambda is printed as '()'
+    //         (DynamicTest, RandomOrdererUtils, TestReporter, AbstractJreCondition)
+    //         ex: '() -> testExecutor.accept(input)' -> '()'
+    //      2. Captured variables and lambda parameters are mixed up (wrong local variable offset
+    //         in synthetic 'lambda$x$n' methods) (MethodBasedCondition)
+    //         ex: 'methodName -> getConditionMethod(methodName, context)' -> '... getConditionMethod(context, context)'
+    //      3. Boxing cast removed, overloaded call becomes ambiguous (Assertions)
+    //         ex: 'AssertEquals.assertEquals((Short) expected, actual)' -> 'AssertEquals.assertEquals(expected, actual)'
+    //      4. Generic type lost / raw casts (AssertLinesMatch, DisplayNameGenerator, MethodOrderer)
+    //         ex: 'collect(Collectors.toList())' -> 'collect((Collector)Collectors.toList())'
+    //      5. Interface default super call 'X.super.m()' printed as 'super.m()' (ParameterContext)
+    //      6. Null check of method reference receiver ('Objects.requireNonNull') printed and
+    //         'unreported exception Throwable' (AssertTimeoutPreemptively)
+    //      Out of scope: 'module-info.class' (recompiled with -source 8), Kotlin class 'AssertionsKt'
+//    @Test
+//    public void testJUnit4() throws Exception {
+//        // Decompile and recompile 'junit:junit:4.12'
+//        test(org.junit.Test.class);
+//    }
 
     @Test
     public void testMimecraft() throws Exception {

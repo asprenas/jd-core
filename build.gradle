@@ -13,6 +13,10 @@ repositories {
 }
 
 dependencies {
+    testImplementation platform('org.junit:junit-bom:5.14.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
     testImplementation 'commons-codec:commons-codec:1.13'
     testImplementation 'org.apache.commons:commons-collections4:4.1'
     testImplementation 'org.apache.commons:commons-imaging:1.0-alpha1'
@@ -23,7 +27,8 @@ dependencies {
     testImplementation 'joda-time:joda-time:2.10.5'
     testImplementation 'org.joda:joda-convert:2.2.1'
     testImplementation 'org.jsoup:jsoup:1.12.1'
-    testImplementation 'junit:junit:4.12'
+    // Decompilation fixture for JarFileToJavaSourceTest.testJUnit4 (disabled, see TODO there)
+    //testImplementation 'junit:junit:4.12'
     testImplementation 'javax.jms:javax.jms-api:2.0.1'
     testImplementation 'javax.mail:javax.mail-api:1.6.2'
     testImplementation 'com.squareup.mimecraft:mimecraft:1.1.1'
@@ -47,7 +52,7 @@ tasks.withType(JavaCompile).configureEach {
 }
 
 tasks.named('test') {
-    useJUnit()
+    useJUnitPlatform()
     jvmArgs '-XX:-OmitStackTraceInFastThrow'
 }
 

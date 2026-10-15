@@ -7,7 +7,7 @@
 
 package org.jd.core.v1;
 
-import junit.framework.TestCase;
+import static org.junit.jupiter.api.Assertions.*;
 import org.jd.core.v1.api.loader.Loader;
 import org.jd.core.v1.loader.ClassPathLoader;
 import org.jd.core.v1.loader.ZipLoader;
@@ -23,7 +23,7 @@ import org.jd.core.v1.service.converter.classfiletojavasyntax.processor.ConvertC
 import org.jd.core.v1.service.converter.classfiletojavasyntax.util.*;
 import org.jd.core.v1.service.deserializer.classfile.DeserializeClassFileProcessor;
 import org.jd.core.v1.cfg.ControlFlowGraphPlantUMLWriter;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -34,7 +34,7 @@ import java.util.List;
 
 import static org.jd.core.v1.service.converter.classfiletojavasyntax.model.cfg.BasicBlock.*;
 
-public class ControlFlowGraphTest extends TestCase {
+public class ControlFlowGraphTest {
     protected DeserializeClassFileProcessor deserializer = new DeserializeClassFileProcessor();
     protected ConvertClassFileProcessor converter = new ConvertClassFileProcessor();
     protected ClassPathLoader loader = new ClassPathLoader();
@@ -2455,24 +2455,24 @@ public class ControlFlowGraphTest extends TestCase {
                 continue;
             }
 
-            assertTrue("#" + basicBlock.getIndex() + " contains an invalid index", basicBlock.getIndex() == i);
-            assertTrue("#" + basicBlock.getIndex() + " is a TRY_DECLARATION -> reduction failed", basicBlock.getType() != TYPE_TRY_DECLARATION);
-            assertTrue("#" + basicBlock.getIndex() + " is a SWITCH_DECLARATION -> reduction failed", basicBlock.getType() != TYPE_SWITCH_DECLARATION);
-            assertTrue("#" + basicBlock.getIndex() + " is a CONDITIONAL -> reduction failed", basicBlock.getType() != TYPE_CONDITIONAL_BRANCH);
-            assertTrue("#" + basicBlock.getIndex() + " is a GOTO -> reduction failed", basicBlock.getType() != TYPE_GOTO);
+            assertTrue(basicBlock.getIndex() == i, "#" + basicBlock.getIndex() + " contains an invalid index");
+            assertTrue(basicBlock.getType() != TYPE_TRY_DECLARATION, "#" + basicBlock.getIndex() + " is a TRY_DECLARATION -> reduction failed");
+            assertTrue(basicBlock.getType() != TYPE_SWITCH_DECLARATION, "#" + basicBlock.getIndex() + " is a SWITCH_DECLARATION -> reduction failed");
+            assertTrue(basicBlock.getType() != TYPE_CONDITIONAL_BRANCH, "#" + basicBlock.getIndex() + " is a CONDITIONAL -> reduction failed");
+            assertTrue(basicBlock.getType() != TYPE_GOTO, "#" + basicBlock.getIndex() + " is a GOTO -> reduction failed");
 
             if (!basicBlock.matchType(GROUP_CONDITION)) {
                 for (BasicBlock predecessor : basicBlock.getPredecessors()) {
-                    assertTrue("#" + predecessor.getIndex() + " is a predecessor of #" + basicBlock.getIndex() + " but #" + predecessor.getIndex() + " does not refer it", predecessor.contains(basicBlock));
+                    assertTrue(predecessor.contains(basicBlock), "#" + predecessor.getIndex() + " is a predecessor of #" + basicBlock.getIndex() + " but #" + predecessor.getIndex() + " does not refer it");
                 }
             }
 
             if (basicBlock.matchType(TYPE_IF|TYPE_IF_ELSE)) {
-                assertTrue("#" + basicBlock.getIndex() + " is a IF or a IF_ELSE with a 'then' branch jumping to itself", basicBlock.getSub1() != basicBlock);
+                assertTrue(basicBlock.getSub1() != basicBlock, "#" + basicBlock.getIndex() + " is a IF or a IF_ELSE with a 'then' branch jumping to itself");
             }
 
             if (basicBlock.getType() == TYPE_IF_ELSE) {
-                assertTrue("#" + basicBlock.getIndex() + " is a IF_ELSE with a 'else' branch jumping to itself", basicBlock.getSub2() != basicBlock);
+                assertTrue(basicBlock.getSub2() != basicBlock, "#" + basicBlock.getIndex() + " is a IF_ELSE with a 'else' branch jumping to itself");
             }
 
             if (basicBlock.matchType(TYPE_TRY|TYPE_TRY_JSR)) {
@@ -2485,14 +2485,14 @@ public class ControlFlowGraphTest extends TestCase {
                     int offset = exceptionHandler.getBasicBlock().getFromOffset();
 
                     if (name == null) {
-                        assertFalse("#" + basicBlock.getIndex() + " contains multiple finally handlers", containsFinally);
+                        assertFalse(containsFinally, "#" + basicBlock.getIndex() + " contains multiple finally handlers");
                         containsFinally = true;
                     } else {
-                        assertFalse("#" + basicBlock.getIndex() + " contains multiple handlers for " + name, exceptionNames.contains(name));
+                        assertFalse(exceptionNames.contains(name), "#" + basicBlock.getIndex() + " contains multiple handlers for " + name);
                         exceptionNames.add(name);
                     }
 
-                    assertTrue("#" + basicBlock.getIndex() + " have an invalid exception handler", !exceptionHandler.getBasicBlock().matchType(GROUP_CONDITION));
+                    assertTrue(!exceptionHandler.getBasicBlock().matchType(GROUP_CONDITION), "#" + basicBlock.getIndex() + " have an invalid exception handler");
 
                     if (maxOffset < offset) {
                         maxOffset = offset;
@@ -2513,22 +2513,22 @@ public class ControlFlowGraphTest extends TestCase {
                             offset = bb.getFromOffset();
                         }
 
-                        assertTrue("#" + basicBlock.getIndex() + " is a TRY or TRY_WITH_JST -> #" + exceptionHandler.getBasicBlock().getIndex() + " handler reduction failed", offset < maxOffset);
+                        assertTrue(offset < maxOffset, "#" + basicBlock.getIndex() + " is a TRY or TRY_WITH_JST -> #" + exceptionHandler.getBasicBlock().getIndex() + " handler reduction failed");
                     }
                 }
             }
 
             if (basicBlock.getType() == TYPE_SWITCH) {
                 for (SwitchCase switchCase : basicBlock.getSwitchCases()) {
-                    assertTrue("#" + basicBlock.getIndex() + " have an invalid switch case", !switchCase.getBasicBlock().matchType(GROUP_CONDITION));
+                    assertTrue(!switchCase.getBasicBlock().matchType(GROUP_CONDITION), "#" + basicBlock.getIndex() + " have an invalid switch case");
                 }
             }
 
             if (!basicBlock.matchType(GROUP_CONDITION)) {
-                assertTrue("#" + basicBlock.getIndex() + " have an invalid next basic block", (basicBlock.getNext() == null) || !basicBlock.getNext().matchType(GROUP_CONDITION));
-                assertTrue("#" + basicBlock.getIndex() + " have an invalid branch basic block", (basicBlock.getBranch() == null) || !basicBlock.getBranch().matchType(GROUP_CONDITION));
-                assertTrue("#" + basicBlock.getIndex() + " have an invalid sub1 basic block", (basicBlock.getSub1() == null) || !basicBlock.getSub1().matchType(GROUP_CONDITION));
-                assertTrue("#" + basicBlock.getIndex() + " have an invalid sub2 basic block", (basicBlock.getSub2() == null) || !basicBlock.getSub2().matchType(GROUP_CONDITION));
+                assertTrue((basicBlock.getNext() == null) || !basicBlock.getNext().matchType(GROUP_CONDITION), "#" + basicBlock.getIndex() + " have an invalid next basic block");
+                assertTrue((basicBlock.getBranch() == null) || !basicBlock.getBranch().matchType(GROUP_CONDITION), "#" + basicBlock.getIndex() + " have an invalid branch basic block");
+                assertTrue((basicBlock.getSub1() == null) || !basicBlock.getSub1().matchType(GROUP_CONDITION), "#" + basicBlock.getIndex() + " have an invalid sub1 basic block");
+                assertTrue((basicBlock.getSub2() == null) || !basicBlock.getSub2().matchType(GROUP_CONDITION), "#" + basicBlock.getIndex() + " have an invalid sub2 basic block");
             }
         }
 
@@ -2536,8 +2536,8 @@ public class ControlFlowGraphTest extends TestCase {
         SilentWatchDog watchdog = new SilentWatchDog();
         BasicBlock result = checkBasicBlock(visited, cfg.getStart(), watchdog);
 
-        assertFalse("DELETED basic block detected -> reduction failed", (result != null) && (result.getType() == TYPE_DELETED));
-        assertFalse("Cycle detected -> reduction failed", (result != null) && (result.getType() != TYPE_DELETED));
+        assertFalse((result != null) && (result.getType() == TYPE_DELETED), "DELETED basic block detected -> reduction failed");
+        assertFalse((result != null) && (result.getType() != TYPE_DELETED), "Cycle detected -> reduction failed");
     }
 
     protected static BasicBlock checkBasicBlock(BitSet visited, BasicBlock basicBlock, SilentWatchDog watchdog) {

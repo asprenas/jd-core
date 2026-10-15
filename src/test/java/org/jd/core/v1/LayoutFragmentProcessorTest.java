@@ -7,7 +7,7 @@
 
 package org.jd.core.v1;
 
-import junit.framework.TestCase;
+import static org.junit.jupiter.api.Assertions.*;
 import org.jd.core.v1.loader.ZipLoader;
 import org.jd.core.v1.model.message.Message;
 import org.jd.core.v1.printer.PlainTextPrinter;
@@ -19,14 +19,14 @@ import org.jd.core.v1.service.tokenizer.javafragmenttotoken.JavaFragmentToTokenP
 import org.jd.core.v1.service.writer.WriteTokenProcessor;
 import org.jd.core.v1.services.tokenizer.javafragmenttotoken.TestTokenizeJavaFragmentProcessor;
 import org.jd.core.v1.regex.PatternMaker;
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
 import java.io.InputStream;
 import java.util.Collections;
 import java.util.Map;
 
-public class LayoutFragmentProcessorTest extends TestCase {
+public class LayoutFragmentProcessorTest {
     protected DeserializeClassFileProcessor deserializer = new DeserializeClassFileProcessor();
     protected ClassFileToJavaSyntaxProcessor converter = new ClassFileToJavaSyntaxProcessor();
     protected JavaSyntaxToJavaFragmentProcessor fragmenter = new JavaSyntaxToJavaFragmentProcessor();
@@ -263,7 +263,7 @@ public class LayoutFragmentProcessorTest extends TestCase {
 
         printSource(source);
 
-        Assert.assertTrue(source.matches(PatternMaker.make("/* 30: 30 */", "int[][] ia", "0, 1, 2")));
+        Assertions.assertTrue(source.matches(PatternMaker.make("/* 30: 30 */", "int[][] ia", "0, 1, 2")));
 
         assertTrue(source.indexOf("/* 75: 75 */") != -1);
     }

@@ -7,16 +7,16 @@
 
 package org.jd.core.v1;
 
-import junit.framework.TestCase;
+import static org.junit.jupiter.api.Assertions.*;
 import org.jd.core.v1.model.javasyntax.type.*;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.visitor.BindTypesToTypesVisitor;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 
 import static org.jd.core.v1.model.javasyntax.type.ObjectType.TYPE_INTEGER;
 
-public class BindTypeParametersToTypeArgumentsVisitorTest extends TestCase {
+public class BindTypeParametersToTypeArgumentsVisitorTest {
     @Test
     public void testGenericTypeI0() throws Exception {
         HashMap<String, TypeArgument> bindings = new HashMap<>();

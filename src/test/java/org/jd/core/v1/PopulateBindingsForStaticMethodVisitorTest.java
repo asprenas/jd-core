@@ -7,12 +7,12 @@
 
 package org.jd.core.v1;
 
-import junit.framework.TestCase;
+import static org.junit.jupiter.api.Assertions.*;
 import org.jd.core.v1.loader.ClassPathLoader;
 import org.jd.core.v1.model.javasyntax.type.*;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.util.TypeMaker;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.visitor.PopulateBindingsWithTypeArgumentVisitor;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -21,7 +21,7 @@ import static org.jd.core.v1.model.javasyntax.type.ObjectType.TYPE_INTEGER;
 import static org.jd.core.v1.model.javasyntax.type.ObjectType.TYPE_STRING;
 import static org.jd.core.v1.model.javasyntax.type.PrimitiveType.TYPE_INT;
 
-public class PopulateBindingsForStaticMethodVisitorTest extends TestCase {
+public class PopulateBindingsForStaticMethodVisitorTest {
     @Test
     public void test() throws Exception {
         // ArrayList<? extends String> method(Set<Integer>, char);

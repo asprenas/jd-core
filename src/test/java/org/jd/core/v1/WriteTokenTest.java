@@ -12,8 +12,8 @@ import org.jd.core.v1.model.token.*;
 import org.jd.core.v1.printer.PlainTextMetaPrinter;
 import org.jd.core.v1.service.writer.WriteTokenProcessor;
 import org.jd.core.v1.util.DefaultList;
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
 public class WriteTokenTest {
     public static final KeywordToken PACKAGE = new KeywordToken("package");
@@ -238,7 +238,7 @@ public class WriteTokenTest {
             "/* 23:  0 */   }\n" +
             "/* 24:  0 */ }\n";
 
-        Assert.assertEquals(expected, source);
+        Assertions.assertEquals(expected, source);
     }
 
 
@@ -293,7 +293,7 @@ public class WriteTokenTest {
         System.out.print(source);
         System.out.println("- - - - - - - - ");
 
-        Assert.assertTrue(source.indexOf("<MARKER type='COMMENT'>/* Block comment */</MARKER type='COMMENT'>") != -1);
-        Assert.assertTrue(source.indexOf("<MARKER type='JAVADOC'>/** Javadoc comment */</MARKER type='JAVADOC'>") != -1);
+        Assertions.assertTrue(source.indexOf("<MARKER type='COMMENT'>/* Block comment */</MARKER type='COMMENT'>") != -1);
+        Assertions.assertTrue(source.indexOf("<MARKER type='JAVADOC'>/** Javadoc comment */</MARKER type='JAVADOC'>") != -1);
     }
 }
