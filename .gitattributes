@@ -6,6 +6,7 @@ Info.plist text eol=lf
 
 # Declare script files that will always have LF line endings on checkout.
 *.sh text eol=lf
+gradlew text eol=lf
 
 # Declare script files that will always have CR/LF line endings on checkout.
 *.bat text eol=crlf
@@ -15,3 +16,4 @@ Info.plist text eol=lf
 *.jpg binary
 *.gif binary
 *.icns binary
+*.jar binary
