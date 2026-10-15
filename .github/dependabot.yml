@@ -1,0 +1,40 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]
+
+  - package-ecosystem: gradle
+    directory: /
+    schedule:
+      interval: weekly
+    ignore:
+      # JUnit 6 requires Java 17 to compile tests, but tests are compiled with
+      # options.release = 8 (build.gradle). Allow only 5.x updates until tests
+      # are migrated to JUnit 6 (compileTestJava with release 17).
+      - dependency-name: "org.junit:junit-bom"
+        update-types: ["version-update:semver-major"]
+      # Decompilation fixtures for JarFileToJavaSourceTest: versions are pinned on purpose,
+      # updating them changes the test input (see JarFileToJavaSourceTest)
+      - dependency-name: "commons-codec:commons-codec"
+      - dependency-name: "org.apache.commons:commons-collections4"
+      - dependency-name: "org.apache.commons:commons-imaging"
+      - dependency-name: "org.apache.commons:commons-lang3"
+      - dependency-name: "com.jakewharton:disklrucache"
+      - dependency-name: "com.squareup:javapoet"
+      - dependency-name: "com.squareup:javawriter"
+      - dependency-name: "joda-time:joda-time"
+      - dependency-name: "org.joda:joda-convert"
+      - dependency-name: "org.jsoup:jsoup"
+      - dependency-name: "junit:junit"
+      - dependency-name: "javax.jms:javax.jms-api"
+      - dependency-name: "javax.mail:javax.mail-api"
+      - dependency-name: "com.squareup.mimecraft:mimecraft"
+      - dependency-name: "org.scribe:scribe"
+      - dependency-name: "com.sparkjava:spark-core"
+      - dependency-name: "log4j:log4j"
+      - dependency-name: "com.google.guava:guava"
