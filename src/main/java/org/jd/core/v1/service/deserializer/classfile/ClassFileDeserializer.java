@@ -204,7 +204,8 @@ public class ClassFileDeserializer {
             int descriptorIndex = reader.readUnsignedShort();
             HashMap<String, Attribute> attributes = loadAttributes(reader, constants);
 
-            String name = constants.getConstantUtf8(nameIndex);
+            // name_index 0 means "no name" (JVMS 4.7.24)
+            String name = (nameIndex == 0) ? null : constants.getConstantUtf8(nameIndex);
             String descriptor = constants.getConstantUtf8(descriptorIndex);
 
             fields[i] = new Field(accessFlags, name, descriptor, attributes);
@@ -226,7 +227,8 @@ public class ClassFileDeserializer {
             int descriptorIndex = reader.readUnsignedShort();
             HashMap<String, Attribute> attributes = loadAttributes(reader, constants);
 
-            String name = constants.getConstantUtf8(nameIndex);
+            // name_index 0 means "no name" (JVMS 4.7.24)
+            String name = (nameIndex == 0) ? null : constants.getConstantUtf8(nameIndex);
             String descriptor = constants.getConstantUtf8(descriptorIndex);
 
             methods[i] = new Method(accessFlags, name, descriptor, attributes, constants);
@@ -522,7 +524,8 @@ public class ClassFileDeserializer {
             int descriptorIndex = reader.readUnsignedShort();
             int index = reader.readUnsignedShort();
 
-            String name = constants.getConstantUtf8(nameIndex);
+            // name_index 0 means "no name" (JVMS 4.7.24)
+            String name = (nameIndex == 0) ? null : constants.getConstantUtf8(nameIndex);
             String descriptor = constants.getConstantUtf8(descriptorIndex);
 
             localVariables[i] = new LocalVariable(startPc, length, name, descriptor, index);
@@ -545,7 +548,8 @@ public class ClassFileDeserializer {
             int descriptorIndex = reader.readUnsignedShort();
             int index = reader.readUnsignedShort();
 
-            String name = constants.getConstantUtf8(nameIndex);
+            // name_index 0 means "no name" (JVMS 4.7.24)
+            String name = (nameIndex == 0) ? null : constants.getConstantUtf8(nameIndex);
             String descriptor = constants.getConstantUtf8(descriptorIndex);
 
             localVariables[i] = new LocalVariableType(startPc, length, name, descriptor, index);
@@ -578,7 +582,8 @@ public class ClassFileDeserializer {
         for (int i=0; i<count; i++) {
             int nameIndex = reader.readUnsignedShort();
 
-            String name = constants.getConstantUtf8(nameIndex);
+            // name_index 0 means "no name" (JVMS 4.7.24)
+            String name = (nameIndex == 0) ? null : constants.getConstantUtf8(nameIndex);
 
             parameters[i] = new MethodParameter(name, reader.readUnsignedShort());
         }

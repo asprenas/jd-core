@@ -26,7 +26,14 @@ public class CompilerUtil {
         JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
         StringWriter writer = new StringWriter();
         DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<>();
-        List<String> options = Arrays.asList("-source", javaVersion, "-target", javaVersion, "-d", DESTINATION_DIRECTORY_PATH, "-cp", System.getProperty("java.class.path"));
+        List<String> options;
+
+        if (parseJavaVersion(System.getProperty("java.version")) <= 8) {
+            options = Arrays.asList("-source", javaVersion, "-target", javaVersion, "-d", DESTINATION_DIRECTORY_PATH, "-cp", System.getProperty("java.class.path"));
+        } else {
+            // Compile against the matching platform API, not the running JDK's (e.g. JDK 21 SequencedCollection)
+            options = Arrays.asList("--release", String.valueOf(parseJavaVersion(javaVersion)), "-Xlint:-options", "-d", DESTINATION_DIRECTORY_PATH, "-cp", System.getProperty("java.class.path"));
+        }
         List<JavaFileObject> compilationUnits = Arrays.asList(javaFileObjects);
 
         try (StandardJavaFileManager fileManager = compiler.getStandardFileManager(diagnostics, null, null)) {
@@ -68,8 +75,8 @@ public class CompilerUtil {
         } else {
             int numericPreferredJavaVersion = parseJavaVersion(preferredJavaVersion);
 
-            if (numericPreferredJavaVersion < 6) {
-                return "1.6";
+            if (numericPreferredJavaVersion < 8) {
+                return "1.8";
             } else {
                 return preferredJavaVersion;
             }
