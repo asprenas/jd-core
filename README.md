@@ -2,34 +2,50 @@
 
 JD-Core is a JAVA decompiler written in JAVA.
 
+> **This repository is a fork of [java-decompiler/jd-core](https://github.com/java-decompiler/jd-core).**
+> It is based on upstream commit `fafc656` and adds build/test maintenance
+> (Gradle 9.1, JDK 17 / 21 / 25 support, JUnit 5, GitHub Actions).
+> See [Releases](https://github.com/asprenas/jd-core/releases) for changes.
+
+### Original project
 - Java Decompiler project home page:
-[http://java-decompiler.github.io](https://java-decompiler.github.io)
-- JD-Core source code:
+[https://java-decompiler.github.io](https://java-decompiler.github.io)
+- JD-Core source code (upstream):
 [https://github.com/java-decompiler/jd-core](https://github.com/java-decompiler/jd-core)
-- JCenter Maven repository:
-[https://jcenter.bintray.com/](https://bintray.com/java-decompiler/maven/org.jd%3Ajd-core/_latestVersion)
+- Upstream releases:
+[https://github.com/java-decompiler/jd-core/releases](https://github.com/java-decompiler/jd-core/releases)
 
 ## Description
 JD-Core is a standalone JAVA library containing the JAVA decompiler of
-"Java Decompiler project". It support Java 1.1.8 to Java 12.0,
-including Lambda expressions, method references and default methods.
-JD-Core is the engine of JD-GUI.
+"Java Decompiler project". It supports Lambda expressions, method references
+and default methods. JD-Core is the engine of JD-GUI.
+
+The library requires Java 8 or later at runtime (bytecode is compiled with `--release 8`).
+
+Known decompilation issues found with recent libraries (e.g. nested capturing lambdas,
+missing casts on overloaded calls) are listed as TODO in
+[JarFileToJavaSourceTest](src/test/java/org/jd/core/v1/JarFileToJavaSourceTest.java).
 
 ## How to build JD-Core ?
+Requires JDK 17 or later (Gradle 9.1). Tested on JDK 17, 21 and 25.
+The generated jar stays Java 8 compatible.
+
 ```
-> git clone https://github.com/java-decompiler/jd-core.git
+> git clone https://github.com/asprenas/jd-core.git
 > cd jd-core
 > ./gradlew build
 ```
+On Windows, use `gradlew.bat build`.
+
 generate _"build/libs/jd-core-x.y.z.jar"_
 
 ## How to use JD-Core ?
 
 1. Implement the
-_[org.jd.core.loader.Loader](https://github.com/java-decompiler/jd-core/blob/master/src/main/java/org/jd/core/v1/api/loader/Loader.java)_
+_[org.jd.core.v1.api.loader.Loader](https://github.com/asprenas/jd-core/blob/master/src/main/java/org/jd/core/v1/api/loader/Loader.java)_
 interface,
 2. Implement the
-_[org.jd.core.printer.Printer](https://github.com/java-decompiler/jd-core/blob/master/src/main/java/org/jd/core/v1/api/printer/Printer.java)_
+_[org.jd.core.v1.api.printer.Printer](https://github.com/asprenas/jd-core/blob/master/src/main/java/org/jd/core/v1/api/printer/Printer.java)_
 interface,
 3. And call the method _"decompile(loader, printer, internalTypeName);"_
 
