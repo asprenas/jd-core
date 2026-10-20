@@ -3,3 +3,4 @@
 + o instanceof Line(Point(int x1, int y1), Point(int x2, int y2))
 ~ case Pair\(Leaf\(int \w+\), Leaf\(int \w+\)\):
 - MatchException
+~ case Point\(int \w+, int \w+\) when \w+ == \w+:

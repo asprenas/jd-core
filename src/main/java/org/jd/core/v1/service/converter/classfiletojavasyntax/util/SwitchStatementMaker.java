@@ -707,6 +707,21 @@ public class SwitchStatementMaker {
         return isRecordPatternInstanceOf(statement.getExpression(), selector);
     }
 
+    public static void checkNoAssignment(Statements statements, final int localVariableIndex) {
+        statements.accept(new org.jd.core.v1.model.javasyntax.AbstractJavaSyntaxVisitor() {
+            @Override
+            public void visit(BinaryOperatorExpression expression) {
+                Expression left = expression.getLeftExpression();
+
+                if ("=".equals(expression.getOperator()) && left.isLocalVariableReferenceExpression() &&
+                    (((ClassFileLocalVariableReferenceExpression)left).getLocalVariable().getIndex() == localVariableIndex)) {
+                    throw new IllegalStateException("rewritten pattern switch not understood");
+                }
+                super.visit(expression);
+            }
+        });
+    }
+
     public static void checkRecordPatternStatements(Statements statements) {
         statements.accept(new org.jd.core.v1.model.javasyntax.AbstractJavaSyntaxVisitor() {
             @Override
@@ -719,8 +734,25 @@ public class SwitchStatementMaker {
         });
     }
 
-    /** First statement 'if (condition) restart = nextIndex;' of the block: removes it and returns the guard '!condition' */
+    /**
+     * First statements 'if (condition) restart = nextIndex;' of the block: removes them and returns the guard
+     * '!condition1 && !condition2...'
+     */
     protected static Expression removeGuard(SwitchStatement.Block block, Expression restart, int nextIndex) {
+        Expression guard = removeFirstGuard(block, restart, nextIndex);
+
+        if (guard != null) {
+            Expression next;
+
+            while ((next = removeFirstGuard(block, restart, nextIndex)) != null) {
+                guard = new BinaryOperatorExpression(guard.getLineNumber(), PrimitiveType.TYPE_BOOLEAN, guard, "&&", next, 13);
+            }
+        }
+
+        return guard;
+    }
+
+    protected static Expression removeFirstGuard(SwitchStatement.Block block, Expression restart, int nextIndex) {
         BaseStatement statements = block.getStatements();
 
         if ((statements == null) || !statements.isList() || (statements.size() == 0) || !statements.getFirst().isIfStatement()) {

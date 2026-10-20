@@ -62,6 +62,7 @@ public class ByteCodeParser {
     private ClassFileBodyDeclaration bodyDeclaration;
     private Map<String, BaseType> typeBounds;
     private Type returnedType;
+    private int[] switchArguments;
 
     public ByteCodeParser(
             TypeMaker typeMaker, LocalVariableMaker localVariableMaker, ClassFile classFile,
@@ -811,6 +812,7 @@ public class ByteCodeParser {
                     }
                     break;
                 case 186: // INVOKEDYNAMIC
+                    switchArguments = (cfg.getSwitchArguments() == null) ? null : cfg.getSwitchArguments().get(offset);
                     parseInvokeDynamic(statements, stack, constants, lineNumber,  ((code[++offset] & 255) << 8) | (code[++offset] & 255));
                     offset += 2; // Skip 2 bytes
                     break;
@@ -1334,6 +1336,10 @@ public class ByteCodeParser {
                     indyParameters.getList().get(1).isLocalVariableReferenceExpression()) {
                     // The 'restart' index is an int (javac stores 0, 1, ... in it)
                     ((ClassFileLocalVariableReferenceExpression)indyParameters.getList().get(1)).getLocalVariable().typeOnLeft(typeBounds, TYPE_INT);
+                }
+                if (switchArguments != null) {
+                    // Labels of the cases merged by javac (see RecordPatternSwitchMaker)
+                    bootstrapMethod = new BootstrapMethod(bootstrapMethod.getBootstrapMethodRef(), switchArguments);
                 }
                 stack.push(invokeDynamicMaker.makeSwitchIndex(lineNumber, indyMethodName, bootstrapMethod, indyParameters, indyDescriptor));
                 return;

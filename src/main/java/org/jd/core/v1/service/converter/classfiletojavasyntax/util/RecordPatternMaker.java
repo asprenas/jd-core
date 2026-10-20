@@ -7,6 +7,7 @@
 
 package org.jd.core.v1.service.converter.classfiletojavasyntax.util;
 
+import org.jd.core.v1.model.classfile.ClassFile;
 import org.jd.core.v1.model.classfile.ConstantPool;
 import org.jd.core.v1.model.classfile.Method;
 import org.jd.core.v1.model.classfile.attribute.AttributeCode;
@@ -18,6 +19,7 @@ import org.jd.core.v1.model.classfile.constant.ConstantNameAndType;
 import org.jd.core.v1.util.DefaultList;
 
 import java.util.*;
+import java.util.function.IntPredicate;
 
 /**
  * Java 21+ record patterns: 'o instanceof Point(int x, int y)' and 'case Point(int x, int y)'.
@@ -75,7 +77,39 @@ public class RecordPatternMaker {
      * @return the record patterns by start offset, or null. When not null, the code and the exception table of
      *         the method are replaced: the caller must restore them.
      */
-    public static Map<Integer, Region> make(Method method, int majorVersion) {
+    public static Map<Integer, Region> make(ClassFile classFile, Method method, Map<Integer, int[]> switchArguments) {
+        AttributeCode attributeCode = method.getAttribute("Code");
+
+        if ((attributeCode == null) || (attributeCode.getExceptionTable() == null)) {
+            return null;
+        }
+
+        HashSet<Integer> accessorOffsets = new HashSet<>();
+
+        for (CodeException codeException : attributeCode.getExceptionTable()) {
+            if (isMatchExceptionHandler(method.getConstants(), attributeCode.getCode(), codeException)) {
+                accessorOffsets.add(codeException.getStartPc());
+            }
+        }
+
+        if (accessorOffsets.isEmpty()) {
+            return null;
+        }
+
+        // Cases merged by javac in nested switches, then the other record patterns of the rewritten code
+        Map<Integer, Region> flattened = RecordPatternSwitchMaker.flatten(classFile, method, accessorOffsets, switchArguments);
+        Map<Integer, Region> regions = makeRegions(method, classFile.getMajorVersion());
+
+        if (flattened == null) {
+            return regions;
+        }
+        if (regions != null) {
+            flattened.putAll(regions);
+        }
+        return flattened;
+    }
+
+    protected static Map<Integer, Region> makeRegions(Method method, int majorVersion) {
         AttributeCode attributeCode = method.getAttribute("Code");
 
         if ((attributeCode == null) || (attributeCode.getExceptionTable() == null)) {
@@ -214,109 +248,17 @@ public class RecordPatternMaker {
         offset += store[2];
 
         // Deconstruction
-        int accessorCount = 0;
+        int[] accessorCount = { 0 };
 
-        while (offset < code.length) {
-            opcode = code[offset] & 255;
-
-            if ((opcode == 4) && ((code[offset+1] & 255) == 153)) { // ICONST_1; IFEQ: always true
-                if (!checkFailOffset(region, offset + 1 + readSignedShort(code, offset+2))) {
-                    return null;
-                }
-                offset += 4;
-                continue;
-            }
-
-            load = decodeLoad(code, offset);
-            if (load == null) {
-                break;
-            }
-
-            Value value = values.get(load[1]);
-            if (value == null) {
-                break;
-            }
-
-            int next = offset + load[2];
-            opcode = code[next] & 255;
-
-            if ((load[0] == 'a') && (opcode == 193) && ((code[next+3] & 255) == 153)) { // INSTANCEOF; IFEQ: nested test
-                if (!checkFailOffset(region, next + 3 + readSignedShort(code, next+4))) {
-                    return null;
-                }
-                value.type = constants.getConstantTypeName(readUnsignedShort(code, next+1));
-                offset = next + 6;
-                continue;
-            }
-
-            if ((load[0] == 'a') && ((opcode == 182) || (opcode == 185)) && accessorOffsets.contains(next)) { // INVOKEVIRTUAL, INVOKEINTERFACE: accessor
-                ConstantMemberRef accessor = constants.getConstant(readUnsignedShort(code, next+1));
-                ConstantNameAndType accessorNameAndType = constants.getConstant(accessor.getNameAndTypeIndex());
-                int storeOffset = next + ((opcode == 182) ? 3 : 5);
-
-                String componentType = null;
-
-                if ((code[storeOffset] & 255) == 192) { // CHECKCAST: generic component
-                    componentType = constants.getConstantTypeName(readUnsignedShort(code, storeOffset+1));
-                    storeOffset += 3;
-                }
-                if (value.type == null) {
-                    value.type = constants.getConstantTypeName(accessor.getClassIndex());
-                }
-
-                store = decodeStore(code, storeOffset);
-                if ((store == null) || isNamed(localVariables, store[1], storeOffset + store[2])) {
-                    return null;
-                }
-
-                Value component = new Value();
-                component.parent = value;
-                component.accessorName = constants.getConstantUtf8(accessorNameAndType.getNameIndex());
-                component.accessorDescriptor = constants.getConstantUtf8(accessorNameAndType.getDescriptorIndex());
-                component.type = componentType;
-                value.components.add(component);
-                values.put(store[1], component);
-                region.syntheticIndexes.add(store[1]);
-                regionAccessorOffsets.add(next);
-                accessorCount++;
-                offset = storeOffset + store[2];
-                continue;
-            }
-
-            String castType = null;
-
-            if ((load[0] == 'a') && (opcode == 192)) { // CHECKCAST
-                castType = constants.getConstantTypeName(readUnsignedShort(code, next+1));
-                next += 3;
-            }
-
-            store = decodeStore(code, next);
-            if ((store == null) || (store[0] != load[0])) {
-                break;
-            }
-
-            if (castType != null) {
-                value.type = castType;
-            }
-
-            if (isNamed(localVariables, store[1], next + store[2])) {
-                // Binding variable
-                if ((value.bindingIndex != -1) || (value == root)) {
-                    return null;
-                }
-                value.bindingIndex = store[1];
-                value.bindingOffset = next + store[2];
-            } else {
-                values.put(store[1], value);
-                region.syntheticIndexes.add(store[1]);
-            }
-
-            offset = next + store[2];
+        offset = matchSteps(constants, code, offset, region, values, accessorOffsets, regionAccessorOffsets, localVariables,
+                            failOffset -> checkFailOffset(region, failOffset), accessorCount);
+        if (offset == -1) {
+            return null;
         }
 
         region.toOffset = offset;
 
-        if ((accessorCount == 0) || !checkValue(root, majorVersion)) {
+        if ((accessorCount[0] == 0) || !checkValue(root, majorVersion)) {
             return null;
         }
         if ((region.failOffset != -1) && (region.toOffset - region.fromOffset < 4)) {
@@ -365,6 +307,158 @@ public class RecordPatternMaker {
     /** 'aload t' in 'astore t; new MatchException; dup; aload t; ...' */
     protected static boolean isMatchExceptionHandlerLoad(byte[] code, int offset) {
         return (offset >= 4) && ((code[offset-1] & 255) == 89) && ((code[offset-4] & 255) == 187); // DUP, NEW
+    }
+
+    /**
+     * Straight-line deconstruction: type tests, casts and copies of the synthetic variables, accessor calls.
+     * @return the offset of the first other instruction, or -1 when the code is not understood
+     */
+    protected static int matchSteps(ConstantPool constants, byte[] code, int offset, Region region, Map<Integer, Value> values, Set<Integer> accessorOffsets,
+                                    Set<Integer> regionAccessorOffsets, LocalVariable[] localVariables, IntPredicate failCheck, int[] accessorCount) {
+        int opcode;
+        int[] load, store;
+
+        while (offset < code.length) {
+            opcode = code[offset] & 255;
+
+            if ((opcode == 4) && ((code[offset+1] & 255) == 153)) { // ICONST_1; IFEQ: always true
+                if (!failCheck.test(offset + 1 + readSignedShort(code, offset+2))) {
+                    return -1;
+                }
+                offset += 4;
+                continue;
+            }
+
+            load = decodeLoad(code, offset);
+            if (load == null) {
+                break;
+            }
+
+            Value value = values.get(load[1]);
+            if (value == null) {
+                break;
+            }
+
+            int next = offset + load[2];
+            opcode = code[next] & 255;
+
+            if ((load[0] == 'a') && (opcode == 193) && ((code[next+3] & 255) == 153)) { // INSTANCEOF; IFEQ: nested test
+                if (!failCheck.test(next + 3 + readSignedShort(code, next+4))) {
+                    return -1;
+                }
+                value.type = constants.getConstantTypeName(readUnsignedShort(code, next+1));
+                offset = next + 6;
+                continue;
+            }
+
+            if ((load[0] == 'a') && ((opcode == 182) || (opcode == 185)) && accessorOffsets.contains(next)) { // INVOKEVIRTUAL, INVOKEINTERFACE: accessor
+                ConstantMemberRef accessor = constants.getConstant(readUnsignedShort(code, next+1));
+                ConstantNameAndType accessorNameAndType = constants.getConstant(accessor.getNameAndTypeIndex());
+                int storeOffset = next + ((opcode == 182) ? 3 : 5);
+
+                String componentType = null;
+
+                if (isBoxing(constants, code, storeOffset)) {
+                    // javac 25: the primitive component of a nested switch is boxed
+                    storeOffset += 3;
+                } else if ((code[storeOffset] & 255) == 192) { // CHECKCAST: generic component
+                    componentType = constants.getConstantTypeName(readUnsignedShort(code, storeOffset+1));
+                    storeOffset += 3;
+                }
+                if (value.type == null) {
+                    value.type = constants.getConstantTypeName(accessor.getClassIndex());
+                }
+
+                store = decodeStore(code, storeOffset);
+                if ((store == null) || isNamed(localVariables, store[1], storeOffset + store[2])) {
+                    return -1;
+                }
+
+                Value component = new Value();
+                component.parent = value;
+                component.accessorName = constants.getConstantUtf8(accessorNameAndType.getNameIndex());
+                component.accessorDescriptor = constants.getConstantUtf8(accessorNameAndType.getDescriptorIndex());
+                component.type = componentType;
+                value.components.add(component);
+                values.put(store[1], component);
+                region.syntheticIndexes.add(store[1]);
+                regionAccessorOffsets.add(next);
+                accessorCount[0]++;
+                offset = storeOffset + store[2];
+                continue;
+            }
+
+            String castType = null;
+
+            if ((load[0] == 'a') && (opcode == 192)) { // CHECKCAST
+                castType = constants.getConstantTypeName(readUnsignedShort(code, next+1));
+                next += 3;
+            }
+
+            boolean unboxing = isUnboxing(constants, code, next);
+
+            if (unboxing) {
+                // javac 25: 'aload $boxed; checkcast Integer; invokevirtual intValue; istore x'
+                next += 3;
+            }
+
+            store = decodeStore(code, next);
+            if ((store == null) || ((store[0] != load[0]) && !unboxing) || (unboxing && (store[0] == 'a'))) {
+                break;
+            }
+
+            if ((castType != null) && !unboxing) {
+                value.type = castType;
+            }
+
+            if (isNamed(localVariables, store[1], next + store[2])) {
+                // Binding variable
+                if ((value.bindingIndex != -1) || (value == region.root)) {
+                    return -1;
+                }
+                value.bindingIndex = store[1];
+                value.bindingOffset = next + store[2];
+            } else {
+                values.put(store[1], value);
+                region.syntheticIndexes.add(store[1]);
+            }
+
+            offset = next + store[2];
+        }
+
+
+        return offset;
+    }
+
+    /** 'invokestatic java/lang/Integer.valueOf(I)Ljava/lang/Integer;' and the other wrapper types */
+    protected static boolean isBoxing(ConstantPool constants, byte[] code, int offset) {
+        if ((code[offset] & 255) != 184) { // INVOKESTATIC
+            return false;
+        }
+        ConstantMemberRef cmr = constants.getConstant(readUnsignedShort(code, offset+1));
+        ConstantNameAndType cnat = constants.getConstant(cmr.getNameAndTypeIndex());
+        return "valueOf".equals(constants.getConstantUtf8(cnat.getNameIndex())) && isWrapperType(constants.getConstantTypeName(cmr.getClassIndex()));
+    }
+
+    /** 'invokevirtual java/lang/Integer.intValue()I' and the other wrapper types */
+    protected static boolean isUnboxing(ConstantPool constants, byte[] code, int offset) {
+        if ((code[offset] & 255) != 182) { // INVOKEVIRTUAL
+            return false;
+        }
+        ConstantMemberRef cmr = constants.getConstant(readUnsignedShort(code, offset+1));
+        ConstantNameAndType cnat = constants.getConstant(cmr.getNameAndTypeIndex());
+        String name = constants.getConstantUtf8(cnat.getNameIndex());
+        return name.endsWith("Value") && constants.getConstantUtf8(cnat.getDescriptorIndex()).startsWith("()") && isWrapperType(constants.getConstantTypeName(cmr.getClassIndex()));
+    }
+
+    protected static boolean isWrapperType(String internalTypeName) {
+        switch (internalTypeName) {
+            case "java/lang/Integer": case "java/lang/Long": case "java/lang/Float": case "java/lang/Double":
+            case "java/lang/Short": case "java/lang/Byte": case "java/lang/Character": case "java/lang/Boolean":
+                return true;
+            default:
+                return false;
+        }
     }
 
     protected static boolean checkFailOffset(Region region, int failOffset) {
