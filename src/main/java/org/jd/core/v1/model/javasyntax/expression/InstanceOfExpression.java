@@ -14,6 +14,7 @@ import org.jd.core.v1.model.javasyntax.type.Type;
 public class InstanceOfExpression extends AbstractLineNumberExpression {
     protected Expression expression;
     protected Type instanceOfType;
+    protected Expression pattern; // Java 21+ record pattern 'o instanceof Point(int x, int y)', or null
 
     public InstanceOfExpression(Expression expression, ObjectType instanceOfType) {
         this.expression = expression;
@@ -24,6 +25,17 @@ public class InstanceOfExpression extends AbstractLineNumberExpression {
         super(lineNumber);
         this.expression = expression;
         this.instanceOfType = instanceOfType;
+    }
+
+    public InstanceOfExpression(int lineNumber, Expression expression, Type instanceOfType, Expression pattern) {
+        super(lineNumber);
+        this.expression = expression;
+        this.instanceOfType = instanceOfType;
+        this.pattern = pattern;
+    }
+
+    public Expression getPattern() {
+        return pattern;
     }
 
     @Override

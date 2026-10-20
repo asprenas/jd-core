@@ -8,9 +8,11 @@
 package org.jd.core.v1.service.converter.classfiletojavasyntax.model.cfg;
 
 import org.jd.core.v1.model.classfile.Method;
+import org.jd.core.v1.service.converter.classfiletojavasyntax.util.RecordPatternMaker;
 import org.jd.core.v1.util.DefaultList;
 
 import java.util.HashSet;
+import java.util.Map;
 
 public class ControlFlowGraph {
     protected Method method;
@@ -20,9 +22,19 @@ public class ControlFlowGraph {
         }
     };
     protected int[] offsetToLineNumbers = null;
+    protected Map<Integer, RecordPatternMaker.Region> recordPatterns;
 
     public ControlFlowGraph(Method method) {
         this.method = method;
+    }
+
+    /** Java 21+ record patterns of the rewritten code, by start offset (see RecordPatternMaker), or null */
+    public Map<Integer, RecordPatternMaker.Region> getRecordPatterns() {
+        return recordPatterns;
+    }
+
+    public void setRecordPatterns(Map<Integer, RecordPatternMaker.Region> recordPatterns) {
+        this.recordPatterns = recordPatterns;
     }
 
     public Method getMethod() {

@@ -62,6 +62,7 @@ public class SwitchStatement implements Statement {
 
     public static class ExpressionLabel implements Label {
         protected Expression expression;
+        protected Expression guard; // 'when' clause of a pattern label (Java 21+), or null
 
         public ExpressionLabel(Expression expression) {
             this.expression = expression;
@@ -76,6 +77,14 @@ public class SwitchStatement implements Statement {
             this.expression = expression;
         }
 
+        public Expression getGuard() {
+            return guard;
+        }
+
+        public void setGuard(Expression guard) {
+            this.guard = guard;
+        }
+
         @Override
         public void accept(StatementVisitor visitor) {
             visitor.visit(this);
@@ -83,7 +92,7 @@ public class SwitchStatement implements Statement {
 
         @Override
         public String toString() {
-            return "ExpressionLabel{" + expression.toString() + '}';
+            return "ExpressionLabel{" + expression.toString() + ((guard == null) ? "" : " when " + guard) + '}';
         }
     }
 

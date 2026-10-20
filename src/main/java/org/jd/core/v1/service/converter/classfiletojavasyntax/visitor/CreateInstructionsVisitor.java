@@ -10,6 +10,7 @@ package org.jd.core.v1.service.converter.classfiletojavasyntax.visitor;
 import org.jd.core.v1.model.classfile.ClassFile;
 import org.jd.core.v1.model.classfile.Method;
 import org.jd.core.v1.model.classfile.attribute.AttributeCode;
+import org.jd.core.v1.model.classfile.attribute.CodeException;
 import org.jd.core.v1.model.javasyntax.AbstractJavaSyntaxVisitor;
 import org.jd.core.v1.model.javasyntax.declaration.*;
 import org.jd.core.v1.model.javasyntax.statement.ByteCodeStatement;
@@ -20,6 +21,7 @@ import org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.d
 import org.jd.core.v1.service.converter.classfiletojavasyntax.util.*;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.jd.core.v1.model.javasyntax.declaration.Declaration.*;
 
@@ -116,12 +118,18 @@ public class CreateInstructionsVisitor extends AbstractJavaSyntaxVisitor {
         } else {
             StatementMaker statementMaker = new StatementMaker(typeMaker, localVariableMaker, comd);
             boolean containsLineNumber = (attributeCode.getAttribute("LineNumberTable") != null);
+            // Java 21+ record patterns: the code is rewritten while it is parsed
+            byte[] code = attributeCode.getCode();
+            CodeException[] exceptionTable = attributeCode.getExceptionTable();
 
             try {
+                Map<Integer, RecordPatternMaker.Region> recordPatterns = RecordPatternMaker.make(method, classFile.getMajorVersion());
                 ControlFlowGraph cfg = ControlFlowGraphMaker.make(method);
 
                 if (cfg != null) {
+                    cfg.setRecordPatterns(recordPatterns);
                     ControlFlowGraphGotoReducer.reduce(cfg);
+                    ControlFlowGraphPatternSwitchReducer.reduce(cfg);
                     ControlFlowGraphLoopReducer.reduce(cfg);
 
                     if (ControlFlowGraphReducer.reduce(cfg)) {
@@ -132,7 +140,12 @@ public class CreateInstructionsVisitor extends AbstractJavaSyntaxVisitor {
                 }
             } catch (Exception e) {
                 assert ExceptionUtil.printStackTrace(e);
+                attributeCode.setCode(code);
+                attributeCode.setExceptionTable(exceptionTable);
                 comd.setStatements(new ByteCodeStatement(ByteCodeWriter.write("// ", method)));
+            } finally {
+                attributeCode.setCode(code);
+                attributeCode.setExceptionTable(exceptionTable);
             }
 
             localVariableMaker.make(containsLineNumber, typeMaker);

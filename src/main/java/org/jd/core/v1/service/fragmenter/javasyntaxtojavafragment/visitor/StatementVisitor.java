@@ -28,6 +28,7 @@ public class StatementVisitor extends ExpressionVisitor {
     public static final KeywordToken ASSERT = new KeywordToken("assert");
     public static final KeywordToken BREAK = new KeywordToken("break");
     public static final KeywordToken VAR = new KeywordToken("var");
+    public static final KeywordToken WHEN = new KeywordToken("when");
     public static final KeywordToken CASE = new KeywordToken("case");
     public static final KeywordToken CATCH = new KeywordToken("catch");
     public static final KeywordToken CONTINUE = new KeywordToken("continue");
@@ -538,6 +539,13 @@ public class StatementVisitor extends ExpressionVisitor {
         tokens.add(TextToken.SPACE);
 
         statement.getExpression().accept(this);
+
+        if (statement.getGuard() != null) {
+            tokens.add(TextToken.SPACE);
+            tokens.add(WHEN);
+            tokens.add(TextToken.SPACE);
+            statement.getGuard().accept(this);
+        }
 
         tokens.add(TextToken.COLON);
         fragments.addTokensFragment(tokens);

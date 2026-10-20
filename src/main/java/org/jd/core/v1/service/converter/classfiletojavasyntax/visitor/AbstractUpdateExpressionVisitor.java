@@ -334,6 +334,10 @@ public abstract class AbstractUpdateExpressionVisitor extends AbstractJavaSyntax
     public void visit(SwitchStatement.ExpressionLabel statement) {
         statement.setExpression(updateExpression(statement.getExpression()));
         statement.getExpression().accept(this);
+        if (statement.getGuard() != null) {
+            statement.setGuard(updateExpression(statement.getGuard()));
+            statement.getGuard().accept(this);
+        }
     }
 
     @Override

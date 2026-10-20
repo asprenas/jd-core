@@ -40,6 +40,15 @@ public class AttributeCode implements Attribute {
         return exceptionTable;
     }
 
+    /** Replaced while the decompiler parses a rewritten copy of the code (record patterns) */
+    public void setCode(byte[] code) {
+        this.code = code;
+    }
+
+    public void setExceptionTable(CodeException[] exceptionTable) {
+        this.exceptionTable = exceptionTable;
+    }
+
     @SuppressWarnings("unchecked")
     public <T extends Attribute> T getAttribute(String name) {
         return (attributes == null) ? null : (T)attributes.get(name);

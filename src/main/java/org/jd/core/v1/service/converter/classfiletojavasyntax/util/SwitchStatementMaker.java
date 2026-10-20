@@ -13,6 +13,7 @@ import org.jd.core.v1.model.classfile.Field;
 import org.jd.core.v1.model.javasyntax.expression.*;
 import org.jd.core.v1.model.javasyntax.statement.*;
 import org.jd.core.v1.model.javasyntax.type.ObjectType;
+import org.jd.core.v1.model.javasyntax.type.PrimitiveType;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.declaration.ClassFileBodyDeclaration;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.declaration.ClassFileConstructorOrMethodDeclaration;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.declaration.ClassFileTypeDeclaration;
@@ -21,6 +22,7 @@ import org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.e
 import org.jd.core.v1.service.converter.classfiletojavasyntax.model.localvariable.AbstractLocalVariable;
 import org.jd.core.v1.util.DefaultList;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -355,22 +357,39 @@ public class SwitchStatementMaker {
     }
 
     /**
-     * Java 21+ pattern matching 'switch' without guard: the index computed for SwitchBootstraps.typeSwitch /
-     * enumSwitch is replaced by the selector and the integer labels by the source labels:
-     * 'case Integer i:' (the cast assignment starting the block becomes the binding), 'case null:',
-     * 'case "a":', 'case 1:', 'case Coin.HEADS:'. Returns false (nothing changed) when the switch is not
-     * understood, e.g. with guards: javac restarts the switch with another index.
+     * Java 21+ pattern matching 'switch': the index computed for SwitchBootstraps.typeSwitch / enumSwitch is
+     * replaced by the selector and the integer labels by the source labels: 'case Integer i:' (the cast
+     * assignment starting the block becomes the binding), 'case null:', 'case "a":', 'case 1:',
+     * 'case Coin.HEADS:', 'case String s when s.isEmpty():'. Returns false (nothing changed) when the switch
+     * is not understood.
+     * <p>
+     * Guard: when it does not match, javac restarts the switch at the next label. The jump back is cut by
+     * {@link ControlFlowGraphPatternSwitchReducer}, the block of label k then starts with
+     * 'if (!guard) restart = k + 1;'. Without the 'when' clause this code is wrong: when the switch is not
+     * understood, an IllegalStateException makes the caller fall back to byte code output.
      */
     public static boolean makePatternSwitch(Statements statements, SwitchStatement switchStatement, int majorVersion, boolean switchIsLastStatement) {
+        Expression restart = ((ClassFileSwitchIndexExpression)switchStatement.getCondition()).getRestart();
+        boolean restartAssigned = restart.isLocalVariableReferenceExpression() && assignsLocalVariable(switchStatement, restart);
+
+        if (!makePatternSwitch(statements, switchStatement, majorVersion, switchIsLastStatement, restartAssigned)) {
+            if (restartAssigned) {
+                throw new IllegalStateException("makePatternSwitch : guard not understood");
+            }
+            return false;
+        }
+        if (restartAssigned && assignsLocalVariable(switchStatement, restart)) {
+            throw new IllegalStateException("makePatternSwitch : unexpected 'restart' assignment");
+        }
+
+        return true;
+    }
+
+    protected static boolean makePatternSwitch(Statements statements, SwitchStatement switchStatement, int majorVersion, boolean switchIsLastStatement, boolean restartAssigned) {
         ClassFileSwitchIndexExpression index = (ClassFileSwitchIndexExpression)switchStatement.getCondition();
         Expression selector = index.getSelector();
         Expression restart = index.getRestart();
         List<ClassFileSwitchIndexExpression.Label> labels = index.getLabels();
-
-        if (restart.isLocalVariableReferenceExpression() && assignsLocalVariable(switchStatement, restart)) {
-            // Guard: 'restart = n; continue;'
-            return false;
-        }
 
         // Check every label can be written before changing anything
         HashSet<Integer> usedIndexes = new HashSet<>();
@@ -385,7 +404,7 @@ public class SwitchStatementMaker {
                     if ((i < -1) || (i >= labels.size())) {
                         return false;
                     }
-                    if ((i >= 0) && labels.get(i).isTypePattern() && ((blockLabels.size() != 1) || (getBinding(block, selector) == null)) && (majorVersion < 66)) {
+                    if ((i >= 0) && labels.get(i).isTypePattern() && ((blockLabels.size() != 1) || ((getBinding(block, selector) == null) && !startsWithRecordPattern(block, selector, restartAssigned))) && (majorVersion < 66)) {
                         // No binding variable and no '_' before Java 22
                         return false;
                     }
@@ -397,6 +416,13 @@ public class SwitchStatementMaker {
         // Rewrite the labels
         for (SwitchStatement.Block block : switchStatement.getBlocks()) {
             List<SwitchStatement.Label> blockLabels = getLabels(block);
+            int maxIndex = -1;
+
+            for (SwitchStatement.Label label : blockLabels) {
+                if (label != SwitchStatement.DEFAULT_LABEL) {
+                    maxIndex = Math.max(maxIndex, label.getExpression().getIntegerValue());
+                }
+            }
 
             for (SwitchStatement.Label label : blockLabels) {
                 if (label == SwitchStatement.DEFAULT_LABEL) {
@@ -414,11 +440,44 @@ public class SwitchStatementMaker {
                     ClassFileSwitchIndexExpression.Label l = labels.get(i);
 
                     if (l.isTypePattern()) {
-                        Expression binding = (blockLabels.size() == 1) ? removeBinding(block, selector) : null;
-                        expressionLabel.setExpression(new TypePatternExpression(lineNumber, l.getType(), binding));
+                        Expression recordPattern = (blockLabels.size() == 1) ? removeRecordPattern(block, selector) : null;
+
+                        if (recordPattern != null) {
+                            // 'case R(...)': the pattern can not fail
+                            expressionLabel.setExpression(recordPattern);
+                            if (restartAssigned) {
+                                expressionLabel.setGuard(removeGuard(block, restart, i + 1));
+                            }
+                        } else {
+                            Expression binding = (blockLabels.size() == 1) ? removeBinding(block, selector) : null;
+                            expressionLabel.setExpression(new TypePatternExpression(lineNumber, l.getType(), binding));
+                            if (restartAssigned && (blockLabels.size() == 1)) {
+                                Expression guard = removeGuard(block, restart, i + 1);
+
+                                if ((binding == null) && (guard != null)) {
+                                    // 'case R(...)' with nested patterns: 'selector instanceof R(...) && guard'
+                                    Expression[] patternAndGuard = splitRecordPattern(guard, selector);
+
+                                    if (patternAndGuard != null) {
+                                        expressionLabel.setExpression(patternAndGuard[0]);
+                                        guard = patternAndGuard[1];
+                                    }
+                                }
+                                expressionLabel.setGuard(guard);
+                            }
+                        }
                     } else {
                         expressionLabel.setExpression(simplifyEnumConstant(l.getValue(), selector));
                     }
+                }
+            }
+
+            if (restartAssigned && (blockLabels.size() > 1)) {
+                // 'case Integer _, Long _': javac tests the types again, 'if (!(o instanceof Integer || o instanceof Long)) restart = n;'
+                Expression test = removeGuard(block, restart, maxIndex + 1);
+
+                if ((test != null) && !isTypeTestOfLabels(test, selector, blockLabels)) {
+                    throw new IllegalStateException("makePatternSwitch : unexpected test of a multiple pattern label");
                 }
             }
         }
@@ -503,6 +562,219 @@ public class SwitchStatementMaker {
         }
 
         return true;
+    }
+
+    /**
+     * Exhaustive pattern switch with one case: javac jumps to the case body ending with 'return' and the 'default'
+     * block throws, so the case body follows the switch. When the statements following the switch start with a
+     * record pattern label ('selector instanceof R(...);'), they are moved to the empty block.
+     */
+    public static boolean moveFollowingStatements(Statements statements, int switchIndex, SwitchStatement switchStatement) {
+        if (switchIndex >= statements.size()) {
+            return false;
+        }
+
+        Expression selector = ((ClassFileSwitchIndexExpression)switchStatement.getCondition()).getSelector();
+
+        if (!isRecordPatternStatement(statements.get(switchIndex), selector)) {
+            return false;
+        }
+
+        List<SwitchStatement.Block> blocks = switchStatement.getBlocks();
+        int emptyBlockIndex = -1;
+
+        for (int i = 0; i < blocks.size(); i++) {
+            BaseStatement blockStatements = blocks.get(i).getStatements();
+
+            if ((blockStatements == null) || (blockStatements.size() == 0) || ((blockStatements.size() == 1) && blockStatements.getFirst().isBreakStatement())) {
+                if (emptyBlockIndex != -1) {
+                    return false;
+                }
+                emptyBlockIndex = i;
+            }
+        }
+
+        if (emptyBlockIndex == -1) {
+            return false;
+        }
+
+        List<Statement> following = statements.subList(switchIndex, statements.size());
+        Statements blockStatements = new Statements(following);
+        SwitchStatement.Block emptyBlock = blocks.get(emptyBlockIndex);
+
+        following.clear();
+
+        if (emptyBlock.isSwitchStatementLabelBlock()) {
+            blocks.set(emptyBlockIndex, new SwitchStatement.LabelBlock(((SwitchStatement.LabelBlock)emptyBlock).getLabel(), blockStatements));
+        } else {
+            blocks.set(emptyBlockIndex, new SwitchStatement.MultiLabelsBlock(((SwitchStatement.MultiLabelsBlock)emptyBlock).getLabels(), blockStatements));
+        }
+        return true;
+    }
+
+    /** 'selector instanceof T1 || selector instanceof T2 ...' with the types of the labels, in the same order */
+    protected static boolean isTypeTestOfLabels(Expression test, Expression selector, List<SwitchStatement.Label> labels) {
+        ArrayList<Expression> tests = new ArrayList<>();
+
+        while (test.isBinaryOperatorExpression() && "||".equals(test.getOperator())) {
+            tests.add(0, test.getRightExpression());
+            test = test.getLeftExpression();
+        }
+        tests.add(0, test);
+
+        ArrayList<SwitchStatement.Label> patternLabels = new ArrayList<>();
+
+        for (SwitchStatement.Label label : labels) {
+            if (label != SwitchStatement.DEFAULT_LABEL) {
+                patternLabels.add(label);
+            }
+        }
+
+        if (tests.size() != patternLabels.size()) {
+            return false;
+        }
+
+        for (int i = 0; i < tests.size(); i++) {
+            Expression e = tests.get(i);
+            Expression pattern = patternLabels.get(i).getExpression();
+
+            if (!(e instanceof InstanceOfExpression) || !isSameLocalVariable(e.getExpression(), selector) || !pattern.isTypePatternExpression() ||
+                !((InstanceOfExpression)e).getInstanceOfType().equals(pattern.getType())) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    protected static boolean startsWithRecordPattern(SwitchStatement.Block block, Expression selector, boolean restartAssigned) {
+        BaseStatement statements = block.getStatements();
+
+        if ((statements == null) || (statements.size() == 0)) {
+            return false;
+        }
+
+        Statement first = statements.getFirst();
+        // A nested pattern can fail: 'if (!(selector instanceof R(...))) restart = n;', checked by removeGuard
+        return isRecordPatternStatement(first, selector) || (restartAssigned && first.isIfStatement());
+    }
+
+    /** First statement 'selector instanceof R(...);' of the block: removes it and returns the record pattern */
+    protected static Expression removeRecordPattern(SwitchStatement.Block block, Expression selector) {
+        BaseStatement statements = block.getStatements();
+
+        if ((statements == null) || !statements.isList() || (statements.size() == 0) || !isRecordPatternStatement(statements.getFirst(), selector)) {
+            return null;
+        }
+
+        InstanceOfExpression instanceOf = (InstanceOfExpression)statements.getFirst().getExpression();
+        statements.getList().remove(0);
+        return instanceOf.getPattern();
+    }
+
+    /**
+     * 'selector instanceof R(...)' or 'selector instanceof R(...) && guard': returns {R(...), guard or null},
+     * or null
+     */
+    protected static Expression[] splitRecordPattern(Expression expression, Expression selector) {
+        if (isRecordPatternInstanceOf(expression, selector)) {
+            return new Expression[] { ((InstanceOfExpression)expression).getPattern(), null };
+        }
+
+        if (expression.isBinaryOperatorExpression() && "&&".equals(expression.getOperator())) {
+            Expression[] left = splitRecordPattern(expression.getLeftExpression(), selector);
+
+            if (left != null) {
+                Expression guard = (left[1] == null) ? expression.getRightExpression() :
+                    new BinaryOperatorExpression(expression.getLineNumber(), expression.getType(), left[1], "&&", expression.getRightExpression(), 13);
+                return new Expression[] { left[0], guard };
+            }
+        }
+
+        return null;
+    }
+
+    protected static boolean isRecordPatternInstanceOf(Expression expression, Expression selector) {
+        return (expression instanceof InstanceOfExpression) && (((InstanceOfExpression)expression).getPattern() != null) &&
+               ((selector == null) || isSameLocalVariable(expression.getExpression(), selector));
+    }
+
+    protected static boolean isRecordPatternStatement(Statement statement, Expression selector) {
+        if (!statement.isExpressionStatement()) {
+            return false;
+        }
+
+        return isRecordPatternInstanceOf(statement.getExpression(), selector);
+    }
+
+    public static void checkRecordPatternStatements(Statements statements) {
+        statements.accept(new org.jd.core.v1.model.javasyntax.AbstractJavaSyntaxVisitor() {
+            @Override
+            public void visit(ExpressionStatement statement) {
+                if (isRecordPatternStatement(statement, null)) {
+                    throw new IllegalStateException("record pattern label not restored");
+                }
+                super.visit(statement);
+            }
+        });
+    }
+
+    /** First statement 'if (condition) restart = nextIndex;' of the block: removes it and returns the guard '!condition' */
+    protected static Expression removeGuard(SwitchStatement.Block block, Expression restart, int nextIndex) {
+        BaseStatement statements = block.getStatements();
+
+        if ((statements == null) || !statements.isList() || (statements.size() == 0) || !statements.getFirst().isIfStatement()) {
+            return null;
+        }
+
+        IfStatement ifStatement = (IfStatement)statements.getFirst();
+        BaseStatement thenStatements = ifStatement.getStatements();
+
+        if ((thenStatements == null) || (thenStatements.size() != 1)) {
+            return null;
+        }
+
+        Expression expression = thenStatements.getFirst().getExpression();
+
+        if (!isAssignment(expression, restart) || !expression.getRightExpression().isIntegerConstantExpression() ||
+            (expression.getRightExpression().getIntegerValue() != nextIndex)) {
+            return null;
+        }
+
+        statements.getList().remove(0);
+        return negate(ifStatement.getCondition());
+    }
+
+    protected static Expression negate(Expression expression) {
+        int lineNumber = expression.getLineNumber();
+
+        if (expression.isPreOperatorExpression() && "!".equals(expression.getOperator())) {
+            return expression.getExpression();
+        }
+
+        if (expression.isBinaryOperatorExpression()) {
+            Expression left = expression.getLeftExpression();
+            Expression right = expression.getRightExpression();
+            // '!(a < b)' is not 'a >= b' with NaN
+            boolean floatingPoint = isFloatingPoint(left) || isFloatingPoint(right);
+
+            switch (expression.getOperator()) {
+                case "&&": return new BinaryOperatorExpression(lineNumber, PrimitiveType.TYPE_BOOLEAN, negate(left), "||", negate(right), 14);
+                case "||": return new BinaryOperatorExpression(lineNumber, PrimitiveType.TYPE_BOOLEAN, negate(left), "&&", negate(right), 13);
+                case "==": return new BinaryOperatorExpression(lineNumber, PrimitiveType.TYPE_BOOLEAN, left, "!=", right, 9);
+                case "!=": return new BinaryOperatorExpression(lineNumber, PrimitiveType.TYPE_BOOLEAN, left, "==", right, 9);
+                case "<":  if (!floatingPoint) return new BinaryOperatorExpression(lineNumber, PrimitiveType.TYPE_BOOLEAN, left, ">=", right, 8); break;
+                case ">=": if (!floatingPoint) return new BinaryOperatorExpression(lineNumber, PrimitiveType.TYPE_BOOLEAN, left, "<", right, 8); break;
+                case ">":  if (!floatingPoint) return new BinaryOperatorExpression(lineNumber, PrimitiveType.TYPE_BOOLEAN, left, "<=", right, 8); break;
+                case "<=": if (!floatingPoint) return new BinaryOperatorExpression(lineNumber, PrimitiveType.TYPE_BOOLEAN, left, ">", right, 8); break;
+            }
+        }
+
+        return new PreOperatorExpression(lineNumber, "!", expression);
+    }
+
+    protected static boolean isFloatingPoint(Expression expression) {
+        return PrimitiveType.TYPE_FLOAT.equals(expression.getType()) || PrimitiveType.TYPE_DOUBLE.equals(expression.getType());
     }
 
     protected static boolean hasUnconditionalPattern(SwitchStatement switchStatement, Expression selector) {
