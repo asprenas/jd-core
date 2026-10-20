@@ -87,6 +87,11 @@ public class StatementMaker {
         // Generate statements
         makeStatements(watchdog, cfg.getStart(), statements, jumps);
 
+        if (cfg.getRecordPatterns() != null) {
+            // 'selector instanceof R(...);' is the label of a pattern switch: it must have been moved to the label
+            SwitchStatementMaker.checkRecordPatternStatements(statements);
+        }
+
         // Remove 'finally' statements
         if (removeFinallyStatementsFlag) {
             removeFinallyStatementsVisitor.init();
@@ -461,6 +466,22 @@ public class StatementMaker {
 
         if (condition instanceof ClassFileSwitchIndexExpression) {
             // Java 21+ pattern matching 'switch': restore the pattern labels when possible
+            if ((valueType == null) && !nextIsDefaultBlock) {
+                // The body of a case ending with 'return' may follow the switch: see moveFollowingStatements
+                int switchIndex = statements.size();
+                makeStatements(watchdog, basicBlock.getNext(), statements, jumps);
+                if (SwitchStatementMaker.moveFollowingStatements(statements, switchIndex, switchStatement)) {
+                    SwitchStatementMaker.makePatternSwitch(statements, switchStatement, majorVersion, true);
+                } else {
+                    // Restore the order of the original algorithm
+                    Statements following = new Statements();
+                    following.addAll(statements.subList(switchIndex, statements.size()));
+                    statements.subList(switchIndex, statements.size()).clear();
+                    SwitchStatementMaker.makePatternSwitch(statements, switchStatement, majorVersion, true);
+                    statements.addAll(following);
+                }
+                return;
+            }
             SwitchStatementMaker.makePatternSwitch(statements, switchStatement, majorVersion, valueType == null);
         }
 

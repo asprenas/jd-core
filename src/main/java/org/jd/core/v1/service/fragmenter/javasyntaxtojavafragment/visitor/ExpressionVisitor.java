@@ -244,9 +244,13 @@ public class ExpressionVisitor extends TypeVisitor {
         tokens.add(INSTANCEOF);
         tokens.add(TextToken.SPACE);
 
-        BaseType type = expression.getInstanceOfType();
+        if (expression.getPattern() != null) {
+            expression.getPattern().accept(this);
+        } else {
+            BaseType type = expression.getInstanceOfType();
 
-        type.accept(this);
+            type.accept(this);
+        }
     }
 
     @Override
@@ -342,16 +346,40 @@ public class ExpressionVisitor extends TypeVisitor {
 
     @Override
     public void visit(TypePatternExpression expression) {
-        // 'Type name'
+        // 'Type name', 'Type _' or '_'
         BaseType type = expression.getType();
-        type.accept(this);
-        tokens.add(TextToken.SPACE);
+
+        if (type != null) {
+            type.accept(this);
+            tokens.add(TextToken.SPACE);
+        }
 
         if (expression.getVariable() == null) {
             tokens.add(newTextToken("_"));
         } else {
             expression.getVariable().accept(this);
         }
+    }
+
+    @Override
+    public void visit(RecordPatternExpression expression) {
+        // 'Type(pattern, pattern)'
+        BaseType type = expression.getType();
+        type.accept(this);
+        tokens.add(StartBlockToken.START_PARAMETERS_BLOCK);
+
+        boolean first = true;
+
+        for (Expression component : expression.getComponents()) {
+            if (first) {
+                first = false;
+            } else {
+                tokens.add(TextToken.COMMA_SPACE);
+            }
+            component.accept(this);
+        }
+
+        tokens.add(EndBlockToken.END_PARAMETERS_BLOCK);
     }
 
     @Override
@@ -773,6 +801,7 @@ public class ExpressionVisitor extends TypeVisitor {
         @Override public void visit(SuperExpression expression) { ExpressionVisitor.this.visit(expression); }
         @Override public void visit(SwitchExpression expression) { ExpressionVisitor.this.visit(expression); }
         @Override public void visit(TypePatternExpression expression) { ExpressionVisitor.this.visit(expression); }
+        @Override public void visit(RecordPatternExpression expression) { ExpressionVisitor.this.visit(expression); }
         @Override public void visit(TernaryOperatorExpression expression) { ExpressionVisitor.this.visit(expression); }
         @Override public void visit(ThisExpression expression) { ExpressionVisitor.this.visit(expression); }
         @Override public void visit(TypeReferenceDotClassExpression expression) { ExpressionVisitor.this.visit(expression); }

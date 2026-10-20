@@ -43,6 +43,7 @@ public interface ExpressionVisitor {
     void visit(SuperExpression expression);
     void visit(SwitchExpression expression);
     void visit(TypePatternExpression expression);
+    void visit(RecordPatternExpression expression);
     void visit(TernaryOperatorExpression expression);
     void visit(ThisExpression expression);
     void visit(TypeReferenceDotClassExpression expression);

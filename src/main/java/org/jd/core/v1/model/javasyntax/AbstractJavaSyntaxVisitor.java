@@ -264,6 +264,7 @@ public abstract class AbstractJavaSyntaxVisitor extends AbstractTypeArgumentVisi
 
         type.accept(this);
         expression.getExpression().accept(this);
+        safeAccept(expression.getPattern());
     }
 
     @Override
@@ -400,8 +401,19 @@ public abstract class AbstractJavaSyntaxVisitor extends AbstractTypeArgumentVisi
     @Override
     public void visit(TypePatternExpression expression) {
         BaseType type = expression.getType();
-        type.accept(this);
+        if (type != null) {
+            type.accept(this);
+        }
         safeAccept(expression.getVariable());
+    }
+
+    @Override
+    public void visit(RecordPatternExpression expression) {
+        BaseType type = expression.getType();
+        type.accept(this);
+        for (Expression component : expression.getComponents()) {
+            component.accept(this);
+        }
     }
 
     @Override
@@ -575,6 +587,9 @@ public abstract class AbstractJavaSyntaxVisitor extends AbstractTypeArgumentVisi
     @Override
     public void visit(SwitchStatement.ExpressionLabel statement) {
         statement.getExpression().accept(this);
+        if (statement.getGuard() != null) {
+            statement.getGuard().accept(this);
+        }
     }
 
     @Override

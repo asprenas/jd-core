@@ -102,9 +102,31 @@ public class ByteCodeParser {
         int i, count, value;
         AbstractLocalVariable localVariable;
 
+        Map<Integer, RecordPatternMaker.Region> recordPatterns = cfg.getRecordPatterns();
+
         for (int offset=fromOffset; offset<toOffset; offset++) {
             int opcode = code[offset] & 255;
             int lineNumber = syntheticFlag ? Expression.UNKNOWN_LINE_NUMBER : cfg.getLineNumber(offset);
+
+            if (recordPatterns != null) {
+                RecordPatternMaker.Region region = recordPatterns.get(offset);
+
+                if (region != null) {
+                    // Java 21+ record pattern: 'iconst_1; nop...; ifeq FAIL' or 'nop...'
+                    Expression instanceOf = makeRecordPatternInstanceOf(lineNumber, offset, region);
+
+                    if (region.getFailOffset() == -1) {
+                        // Pattern switch label: see SwitchStatementMaker.makePatternSwitch
+                        statements.add(new ExpressionStatement(instanceOf));
+                        offset = region.getToOffset() - 1;
+                    } else {
+                        // Condition, then 'ifeq FAIL'
+                        stack.push(instanceOf);
+                        offset = region.getToOffset() - 4;
+                    }
+                    continue;
+                }
+            }
 
             switch (opcode) {
                 case 0: // NOP
@@ -2036,6 +2058,37 @@ public class ByteCodeParser {
         if (expression.isLocalVariableReferenceExpression() && (ot.getQualifiedName() == null) && (ot.getName() == null)) {
             ((ClassFileLocalVariableReferenceExpression)expression).getLocalVariable().setAnonymousTypeRequired(true);
         }
+    }
+
+    /** 'o instanceof R(...)' */
+    private Expression makeRecordPatternInstanceOf(int lineNumber, int offset, RecordPatternMaker.Region region) {
+        AbstractLocalVariable root = localVariableMaker.getLocalVariable(region.getRootIndex(), offset);
+        Expression pattern = makeRecordPattern(lineNumber, region.getRoot());
+        return new InstanceOfExpression(lineNumber, new ClassFileLocalVariableReferenceExpression(lineNumber, offset, root), pattern.getType(), pattern);
+    }
+
+    private Expression makeRecordPattern(int lineNumber, RecordPatternMaker.Value value) {
+        if (value.isRecord()) {
+            DefaultList<Expression> components = new DefaultList<>(value.getComponents().size());
+
+            for (RecordPatternMaker.Value component : value.getComponents()) {
+                components.add(makeRecordPattern(lineNumber, component));
+            }
+
+            return new RecordPatternExpression(lineNumber, typeMaker.makeFromInternalTypeName(value.getType()), components);
+        }
+
+        if (value.getBindingIndex() == -1) {
+            // Unnamed pattern: '_' or 'Type _'
+            return new TypePatternExpression(lineNumber, (value.getType() == null) ? null : typeMaker.makeFromInternalTypeName(value.getType()), null);
+        }
+
+        // 'Type name': declared by the pattern
+        String descriptor = value.getAccessorDescriptor();
+        Type type = (value.getType() == null) ? typeMaker.makeFromSignature(descriptor.substring(descriptor.indexOf(')') + 1)) : typeMaker.makeFromInternalTypeName(value.getType());
+        AbstractLocalVariable binding = localVariableMaker.getLocalVariableInAssignment(typeBounds, value.getBindingIndex(), value.getBindingOffset(), type);
+        binding.setDeclared(true);
+        return new TypePatternExpression(lineNumber, binding.getType(), new ClassFileLocalVariableReferenceExpression(lineNumber, value.getBindingOffset(), binding));
     }
 
     private static void checkStack(DefaultStack<Expression> stack, byte[] code, int offset) {
