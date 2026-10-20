@@ -753,6 +753,7 @@ public class ExpressionVisitor extends TypeVisitor {
         @Override public void visit(StringConstantExpression expression) { ExpressionVisitor.this.visit(expression); }
         @Override public void visit(SuperConstructorInvocationExpression expression) { ExpressionVisitor.this.visit(expression); }
         @Override public void visit(SuperExpression expression) { ExpressionVisitor.this.visit(expression); }
+        @Override public void visit(SwitchExpression expression) { ExpressionVisitor.this.visit(expression); }
         @Override public void visit(TernaryOperatorExpression expression) { ExpressionVisitor.this.visit(expression); }
         @Override public void visit(ThisExpression expression) { ExpressionVisitor.this.visit(expression); }
         @Override public void visit(TypeReferenceDotClassExpression expression) { ExpressionVisitor.this.visit(expression); }

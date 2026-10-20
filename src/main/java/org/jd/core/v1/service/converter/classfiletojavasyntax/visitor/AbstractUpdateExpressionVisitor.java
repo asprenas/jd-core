@@ -227,6 +227,11 @@ public abstract class AbstractUpdateExpressionVisitor extends AbstractJavaSyntax
     }
 
     @Override
+    public void visit(SwitchExpression expression) {
+        expression.getSwitchStatement().accept(this);
+    }
+
+    @Override
     public void visit(TernaryOperatorExpression expression) {
         expression.setCondition(updateExpression(expression.getCondition()));
         expression.setTrueExpression(updateExpression(expression.getTrueExpression()));
@@ -304,6 +309,11 @@ public abstract class AbstractUpdateExpressionVisitor extends AbstractJavaSyntax
 
     @Override
     public void visit(LambdaExpressionStatement statement) {
+        statement.setExpression(updateExpression(statement.getExpression()));
+        statement.getExpression().accept(this);
+    }
+
+    @Override public void visit(YieldStatement statement) {
         statement.setExpression(updateExpression(statement.getExpression()));
         statement.getExpression().accept(this);
     }

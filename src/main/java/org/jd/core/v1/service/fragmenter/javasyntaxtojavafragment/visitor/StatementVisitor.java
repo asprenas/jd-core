@@ -9,10 +9,12 @@ package org.jd.core.v1.service.fragmenter.javasyntaxtojavafragment.visitor;
 
 import org.jd.core.v1.api.loader.Loader;
 import org.jd.core.v1.model.javafragment.ImportsFragment;
+import org.jd.core.v1.model.javafragment.StartBlockFragment;
 import org.jd.core.v1.model.javafragment.StartSingleStatementBlockFragment;
 import org.jd.core.v1.model.javafragment.StartStatementsBlockFragment;
 import org.jd.core.v1.model.javafragment.TokensFragment;
 import org.jd.core.v1.model.javasyntax.expression.Expression;
+import org.jd.core.v1.model.javasyntax.expression.SwitchExpression;
 import org.jd.core.v1.model.javasyntax.statement.*;
 import org.jd.core.v1.model.javasyntax.type.BaseType;
 import org.jd.core.v1.model.token.*;
@@ -40,6 +42,7 @@ public class StatementVisitor extends ExpressionVisitor {
     public static final KeywordToken SYNCHRONIZED = new KeywordToken("synchronized");
     public static final KeywordToken SWITCH = new KeywordToken("switch");
     public static final KeywordToken THROW = new KeywordToken("throw");
+    public static final KeywordToken YIELD = new KeywordToken("yield");
     public static final KeywordToken TRANSIENT = new KeywordToken("transient");
     public static final KeywordToken TRY = new KeywordToken("try");
     public static final KeywordToken VOLATILE = new KeywordToken("volatile");
@@ -402,6 +405,59 @@ public class StatementVisitor extends ExpressionVisitor {
         tokens.add(TextToken.SEMICOLON);
         tokens.add(EndBlockToken.END_DECLARATION_OR_STATEMENT_BLOCK);
         fragments.addTokensFragment(tokens);
+    }
+
+    @Override
+    public void visit(YieldStatement statement) {
+        tokens = new Tokens();
+        tokens.add(StartBlockToken.START_DECLARATION_OR_STATEMENT_BLOCK);
+        tokens.addLineNumberToken(statement.getLineNumber());
+        tokens.add(YIELD);
+        tokens.add(TextToken.SPACE);
+
+        statement.getExpression().accept(this);
+
+        tokens.add(TextToken.SEMICOLON);
+        tokens.add(EndBlockToken.END_DECLARATION_OR_STATEMENT_BLOCK);
+        fragments.addTokensFragment(tokens);
+    }
+
+    @Override
+    public void visit(SwitchExpression expression) {
+        // Printed like a lambda body: the case blocks are statements inside an expression
+        SwitchStatement statement = expression.getSwitchStatement();
+
+        tokens.add(SWITCH);
+        tokens.add(TextToken.SPACE);
+        tokens.add(StartBlockToken.START_PARAMETERS_BLOCK);
+
+        statement.getCondition().accept(this);
+
+        tokens.add(EndBlockToken.END_PARAMETERS_BLOCK);
+        tokens.add(TextToken.SPACE);
+        fragments.addTokensFragment(tokens);
+
+        StartBlockFragment start = JavaFragmentFactory.addStartStatementsInLambdaBlock(fragments);
+        Iterator<SwitchStatement.Block> iterator = statement.getBlocks().iterator();
+
+        tokens = new Tokens();
+
+        if (iterator.hasNext()) {
+            iterator.next().accept(this);
+
+            while (iterator.hasNext()) {
+                JavaFragmentFactory.addSpacerBetweenSwitchLabelBlock(fragments);
+                iterator.next().accept(this);
+            }
+        }
+
+        if (inExpressionFlag) {
+            JavaFragmentFactory.addEndStatementsInLambdaBlockInParameter(fragments, start);
+        } else {
+            JavaFragmentFactory.addEndStatementsInLambdaBlock(fragments, start);
+        }
+
+        tokens = new Tokens();
     }
 
     @Override

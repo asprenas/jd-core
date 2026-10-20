@@ -339,6 +339,10 @@ public class StatementMaker {
         Type conditionType = condition.getType();
         List<SwitchStatement.Block> blocks = switchStatement.getBlocks();
         DefaultStack<Expression> localStack = new DefaultStack<Expression>(stack);
+        // Switch expression (Java 14+): a block leaves its value on the operand stack, kept as a 'yield'
+        int stackSize = stack.size();
+        Type valueType = null;
+        boolean blockWithoutValue = false;
 
         switchCases.sort(SWITCH_CASE_COMPARATOR);
 
@@ -356,6 +360,25 @@ public class StatementMaker {
             stack.copy(localStack);
             makeStatements(watchdog, bb, subStatements, jumps);
             replacePreOperatorWithPostOperator(subStatements);
+
+            if (stack.size() == stackSize + 1) {
+                Expression value = stack.pop();
+
+                if (!subStatements.isEmpty() && subStatements.getLast().isBreakStatement()) {
+                    subStatements.removeLast();
+                }
+                subStatements.add(new YieldStatement(value));
+
+                if (valueType == null) {
+                    valueType = value.getType();
+                }
+            } else if (stack.size() == stackSize) {
+                if (subStatements.isEmpty() || !subStatements.getLast().isThrowStatement()) {
+                    blockWithoutValue = true;
+                }
+            } else {
+                throw new IllegalStateException("parseSwitch : unexpected stack size " + stack.size() + " (expected " + stackSize + " or " + (stackSize + 1) + "), stack=" + stack);
+            }
 
             if (sc.isDefaultCase()) {
                 blocks.add(new SwitchStatement.LabelBlock(SwitchStatement.DEFAULT_LABEL, subStatements));
@@ -382,9 +405,75 @@ public class StatementMaker {
         } else if (condition.isArrayExpression()) {
             // Check pattern & make 'switch-enum'
             SwitchStatementMaker.makeSwitchEnum(bodyDeclaration, switchStatement);
+        } else if (condition.isMethodInvocationExpression()) {
+            // Check pattern & make 'switch-enum' on 'ordinal()' (javac 21+)
+            SwitchStatementMaker.makeSwitchEnumOrdinal(bodyDeclaration, switchStatement);
         }
 
-        makeStatements(watchdog, basicBlock.getNext(), statements, jumps);
+        boolean nextIsDefaultBlock = false;
+
+        if (valueType != null) {
+            // Every block must yield a value or throw, otherwise the pattern is not understood: fall back
+            if (blockWithoutValue || (statements.getLast() != switchStatement)) {
+                throw new IllegalStateException("parseSwitch : unexpected switch expression");
+            }
+
+            statements.removeLast();
+
+            if (!hasDefaultBlock(switchStatement)) {
+                // Nested switch expression: the 'default' block jumps to the end of the enclosing switch and the
+                // control flow graph keeps it as the next block. It must only produce the value (and break).
+                Statements defaultStatements = new Statements();
+
+                stack.copy(localStack);
+                makeStatements(watchdog, basicBlock.getNext(), defaultStatements, jumps);
+
+                boolean breakAfter = !defaultStatements.isEmpty() && defaultStatements.getLast().isBreakStatement();
+
+                if (breakAfter) {
+                    defaultStatements.removeLast();
+                }
+                if ((stack.size() != stackSize + 1) || !defaultStatements.isEmpty()) {
+                    throw new IllegalStateException("parseSwitch : unexpected switch expression default block");
+                }
+
+                defaultStatements.add(new YieldStatement(stack.pop()));
+                blocks.add(new SwitchStatement.LabelBlock(SwitchStatement.DEFAULT_LABEL, defaultStatements));
+                nextIsDefaultBlock = true;
+
+                if (breakAfter) {
+                    stack.push(new SwitchExpression(condition.getLineNumber(), valueType, switchStatement));
+                    // The value is consumed by the enclosing switch expression block
+                    statements.add(BreakStatement.BREAK);
+                    return;
+                }
+            }
+
+            SwitchStatementMaker.removeExhaustiveDefaultBlock(switchStatement);
+            stack.push(new SwitchExpression(condition.getLineNumber(), valueType, switchStatement));
+        }
+
+        if (!nextIsDefaultBlock) {
+            makeStatements(watchdog, basicBlock.getNext(), statements, jumps);
+        }
+    }
+
+    protected static boolean hasDefaultBlock(SwitchStatement switchStatement) {
+        for (SwitchStatement.Block block : switchStatement.getBlocks()) {
+            if (block.isSwitchStatementLabelBlock()) {
+                if (((SwitchStatement.LabelBlock)block).getLabel() == SwitchStatement.DEFAULT_LABEL) {
+                    return true;
+                }
+            } else if (block.isSwitchStatementMultiLabelsBlock()) {
+                for (SwitchStatement.Label label : ((SwitchStatement.MultiLabelsBlock)block).getLabels()) {
+                    if (label == SwitchStatement.DEFAULT_LABEL) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
     }
 
     @SuppressWarnings("unchecked")
@@ -396,6 +485,10 @@ public class StatementMaker {
 
         tryStatements = makeSubStatements(watchdog, basicBlock.getSub1(), statements, jumps);
 
+        // Switch expression (Java 14+): 'yield' inside 'try' / 'catch'. javac stores the value in a local variable
+        // and every part loads it before jumping to the end of the case: keep the try statement, then the variable.
+        ClassFileLocalVariableReferenceExpression tryValue = popTryValue(assertStackSize, null);
+
         for (ExceptionHandler exceptionHandler : basicBlock.getExceptionHandlers()) {
             if (stack.size() != assertStackSize) {
                 // Not an assert: the result must not depend on -ea. The caller falls back to byte code output.
@@ -403,6 +496,10 @@ public class StatementMaker {
             }
 
             if (exceptionHandler.getInternalThrowableName() == null) {
+                if (tryValue != null) {
+                    throw new IllegalStateException("parseTry : value and 'finally'");
+                }
+
                 // 'finally' handler
                 stack.push(FINALLY_EXCEPTION_EXPRESSION);
 
@@ -461,6 +558,10 @@ public class StatementMaker {
                 localVariableMaker.popFrame();
                 removeExceptionReference(catchStatements);
 
+                if ((tryValue != null) && !((stack.size() == assertStackSize) && !catchStatements.isEmpty() && catchStatements.getLast().isThrowStatement())) {
+                    popTryValue(assertStackSize, tryValue);
+                }
+
                 if (lineNumber != UNKNOWN_LINE_NUMBER) {
                     searchFirstLineNumberVisitor.init();
                     searchFirstLineNumberVisitor.visit(catchStatements);
@@ -501,7 +602,35 @@ public class StatementMaker {
         }
 
         statements.add(statement);
+
+        if (tryValue != null) {
+            stack.push(tryValue);
+        }
+
         makeStatements(watchdog, basicBlock.getNext(), statements, jumps);
+    }
+
+    /**
+     * Pops the local variable left on the stack by a 'try' or 'catch' part of a switch expression block.
+     * Returns null when the 'try' part leaves no value; fails when the parts do not load the same variable.
+     */
+    protected ClassFileLocalVariableReferenceExpression popTryValue(int stackSize, ClassFileLocalVariableReferenceExpression tryValue) {
+        if (stack.size() == stackSize) {
+            if (tryValue != null) {
+                throw new IllegalStateException("parseTry : missing value");
+            }
+            return null;
+        }
+
+        if ((stack.size() == stackSize + 1) && stack.peek().isLocalVariableReferenceExpression()) {
+            ClassFileLocalVariableReferenceExpression value = (ClassFileLocalVariableReferenceExpression)stack.pop();
+
+            if ((tryValue == null) || (tryValue.getLocalVariable().getIndex() == value.getLocalVariable().getIndex())) {
+                return value;
+            }
+        }
+
+        throw new IllegalStateException("parseTry : problem with stack");
     }
 
     protected void removeExceptionReference(Statements catchStatements) {
