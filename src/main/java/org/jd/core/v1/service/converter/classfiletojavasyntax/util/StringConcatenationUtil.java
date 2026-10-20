@@ -11,10 +11,8 @@ import org.jd.core.v1.model.javasyntax.expression.*;
 import org.jd.core.v1.model.javasyntax.type.ObjectType;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.expression.ClassFileMethodInvocationExpression;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.expression.ClassFileNewExpression;
-import org.jd.core.v1.util.DefaultList;
 
 import java.util.Iterator;
-import java.util.StringTokenizer;
 
 public class StringConcatenationUtil {
 
@@ -62,34 +60,42 @@ public class StringConcatenationUtil {
         return new ClassFileMethodInvocationExpression(lineNumber, null, ObjectType.TYPE_STRING, expression, typeName, "toString", "()Ljava/lang/String;", null, null);
     }
 
-    public static Expression create(String recipe, BaseExpression parameters) {
-        StringTokenizer st = new StringTokenizer(recipe, "\u0001", true);
+    /**
+     * Java 9+ StringConcatFactory.makeConcatWithConstants recipe: \u0001 is the next dynamic argument,
+     * \u0002 the next constant (bootstrap argument), any other character is literal text.
+     */
+    public static Expression create(String recipe, String[] recipeConstants, BaseExpression parameters) {
+        Iterator<Expression> arguments = (parameters == null) ? null : parameters.iterator();
+        int constantIndex = 0;
+        StringBuilder text = new StringBuilder();
+        Expression expression = null;
 
-        if (st.hasMoreTokens()) {
-            String token = st.nextToken();
-            Expression expression = token.equals("\u0001") ? createFirstStringConcatenationItem(parameters.getFirst()) : new StringConstantExpression(token);
+        for (int i = 0, length = recipe.length(); i < length; i++) {
+            char c = recipe.charAt(i);
 
-            if (parameters.isList()) {
-                DefaultList<Expression> list = parameters.getList();
-                int index = 0;
-
-                while (st.hasMoreTokens()) {
-                    token = st.nextToken();
-                    Expression e = token.equals("\u0001") ? list.get(index++) : new StringConstantExpression(token);
-                    expression = new BinaryOperatorExpression(expression.getLineNumber(), ObjectType.TYPE_STRING, expression, "+", e, 6);
+            if (c == '\u0001') {
+                if (text.length() > 0) {
+                    expression = append(expression, new StringConstantExpression(text.toString()));
+                    text.setLength(0);
                 }
+                Expression argument = arguments.next();
+                expression = (expression == null) ? createFirstStringConcatenationItem(argument) : append(expression, argument);
+            } else if (c == '\u0002') {
+                text.append(recipeConstants[constantIndex++]);
             } else {
-                while (st.hasMoreTokens()) {
-                    token = st.nextToken();
-                    Expression e = token.equals("\u0001") ? parameters.getFirst() : new StringConstantExpression(token);
-                    expression = new BinaryOperatorExpression(expression.getLineNumber(), ObjectType.TYPE_STRING, expression, "+", e, 6);
-                }
+                text.append(c);
             }
-
-            return expression;
-        } else {
-            return StringConstantExpression.EMPTY_STRING;
         }
+
+        if (text.length() > 0) {
+            expression = append(expression, new StringConstantExpression(text.toString()));
+        }
+
+        return (expression == null) ? StringConstantExpression.EMPTY_STRING : expression;
+    }
+
+    private static Expression append(Expression left, Expression right) {
+        return (left == null) ? right : new BinaryOperatorExpression(left.getLineNumber(), ObjectType.TYPE_STRING, left, "+", right, 6);
     }
 
     public static Expression create(BaseExpression parameters) {
