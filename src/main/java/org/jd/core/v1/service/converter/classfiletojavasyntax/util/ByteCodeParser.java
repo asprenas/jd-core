@@ -26,6 +26,7 @@ import org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.e
 import org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.statement.ClassFileMonitorEnterStatement;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.statement.ClassFileMonitorExitStatement;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.model.localvariable.AbstractLocalVariable;
+import org.jd.core.v1.service.converter.classfiletojavasyntax.visitor.CreateInstructionsVisitor;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.visitor.EraseTypeArgumentVisitor;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.visitor.RenameLocalVariablesVisitor;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.visitor.SearchFirstLineNumberVisitor;
@@ -767,7 +768,7 @@ public class ByteCodeParser {
                                 }
                             } else {
                                 expression1 = typeParametersToTypeArgumentsBinder.newMethodInvocationExpression(
-                                    lineNumber, getMethodInstanceReference(expression1, ot,  name, descriptor), ot,  name, descriptor, methodTypes, parameters);
+                                    lineNumber, getMethodInstanceReference(opcode, constantMemberRef, expression1, ot,  name, descriptor), ot,  name, descriptor, methodTypes, parameters);
                                 typeParametersToTypeArgumentsBinder.bindParameterTypesWithArgumentTypes(TYPE_OBJECT, expression1);
                                 statements.add(new ExpressionStatement(expression1));
                             }
@@ -782,7 +783,7 @@ public class ByteCodeParser {
                                 }
                             }
                             stack.push(typeParametersToTypeArgumentsBinder.newMethodInvocationExpression(
-                                lineNumber, getMethodInstanceReference(expression1, ot,  name, descriptor), ot, name, descriptor, methodTypes, parameters));
+                                lineNumber, getMethodInstanceReference(opcode, constantMemberRef, expression1, ot,  name, descriptor), ot, name, descriptor, methodTypes, parameters));
                         }
                     }
                     break;
@@ -1350,6 +1351,10 @@ public class ByteCodeParser {
                 if (((methodDeclaration.getFlags() & (FLAG_SYNTHETIC|FLAG_PRIVATE)) == (FLAG_SYNTHETIC|FLAG_PRIVATE)) && methodDeclaration.getMethod().getName().equals(name1) && methodDeclaration.getMethod().getDescriptor().equals(descriptor1)) {
                     // Create lambda expression
                     ClassFileMethodDeclaration cfmd = (ClassFileMethodDeclaration)methodDeclaration;
+                    if (cfmd.getStatements() == null) {
+                        // Nested lambda: javac may store the inner lambda method after the enclosing one
+                        new CreateInstructionsVisitor(typeMaker).visit((MethodDeclaration)cfmd);
+                    }
                     stack.push(new LambdaIdentifiersExpression(
                             lineNumber, indyMethodTypes.returnedType, indyMethodTypes.returnedType,
                             prepareLambdaParameterNames(cfmd.getFormalParameters(), parameterCount),
@@ -1998,7 +2003,13 @@ public class ByteCodeParser {
     /**
      * @return expression, 'this' or 'super'
      */
-    private Expression getMethodInstanceReference(Expression expression, ObjectType ot, String name, String descriptor) {
+    private Expression getMethodInstanceReference(int opcode, ConstantMemberRef constantMemberRef, Expression expression, ObjectType ot, String name, String descriptor) {
+        if ((opcode == 183) && constantMemberRef.isInterfaceMethodRef() && expression.isThisExpression() && // INVOKESPECIAL
+            !ot.getInternalName().equals(expression.getType().getInternalName())) {
+            // Default method of a super interface: 'A.super.m()'
+            return new SuperExpression(expression.getLineNumber(), expression.getType(), ot);
+        }
+
         if ((bodyDeclaration.getMethodDeclarations() != null) && expression.isThisExpression()) {
             String internalName = expression.getType().getInternalName();
 

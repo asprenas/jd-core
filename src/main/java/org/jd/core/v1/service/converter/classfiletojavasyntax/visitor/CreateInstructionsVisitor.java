@@ -101,6 +101,11 @@ public class CreateInstructionsVisitor extends AbstractJavaSyntaxVisitor {
     }
 
     protected void createParametersVariablesAndStatements(ClassFileConstructorOrMethodDeclaration comd, boolean constructor) {
+        if (comd.getStatements() != null) {
+            // Already parsed on demand (lambda method referenced by a nested lambda)
+            return;
+        }
+
         ClassFile classFile = comd.getClassFile();
         Method method = comd.getMethod();
         AttributeCode attributeCode = method.getAttribute("Code");

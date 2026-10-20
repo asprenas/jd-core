@@ -599,6 +599,10 @@ public class ExpressionVisitor extends TypeVisitor {
     @Override
     public void visit(SuperExpression expression) {
         tokens.addLineNumberToken(expression);
+        if (expression.getQualifier() != null) {
+            ((BaseType)expression.getQualifier()).accept(this);
+            tokens.add(TextToken.DOT);
+        }
         tokens.add(SUPER);
     }
 
