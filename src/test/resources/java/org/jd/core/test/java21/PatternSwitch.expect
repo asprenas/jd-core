@@ -1,0 +1,6 @@
+# Phase 3: pattern labels (guarded cases are Phase 3-6 follow-up)
++ case Integer i:
++ case null:
+~ case null:\s*(/\*.*\*/)?\s*default:
++ case Circle c:
+- MatchException

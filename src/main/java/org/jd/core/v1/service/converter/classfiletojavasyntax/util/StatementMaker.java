@@ -25,6 +25,7 @@ import org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.d
 import org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.declaration.ClassFileConstructorOrMethodDeclaration;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.declaration.ClassFileFieldDeclaration;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.expression.ClassFileLocalVariableReferenceExpression;
+import org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.expression.ClassFileSwitchIndexExpression;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.statement.ClassFileBreakContinueStatement;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.statement.ClassFileTryStatement;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.model.localvariable.AbstractLocalVariable;
@@ -399,7 +400,9 @@ public class StatementMaker {
 
         int size = statements.size();
 
-        if ((size > 3) && condition.isLocalVariableReferenceExpression() && statements.get(size-2).isSwitchStatement()) {
+        if (condition instanceof ClassFileSwitchIndexExpression) {
+            // Java 21+ pattern matching 'switch': see below, once the switch expression is built
+        } else if ((size > 3) && condition.isLocalVariableReferenceExpression() && statements.get(size-2).isSwitchStatement()) {
             // Check pattern & make 'switch-string'
             SwitchStatementMaker.makeSwitchString(localVariableMaker, statements, switchStatement);
         } else if (condition.isArrayExpression()) {
@@ -442,6 +445,9 @@ public class StatementMaker {
                 nextIsDefaultBlock = true;
 
                 if (breakAfter) {
+                    if (condition instanceof ClassFileSwitchIndexExpression) {
+                        SwitchStatementMaker.makePatternSwitch(statements, switchStatement, majorVersion, false);
+                    }
                     stack.push(new SwitchExpression(condition.getLineNumber(), valueType, switchStatement));
                     // The value is consumed by the enclosing switch expression block
                     statements.add(BreakStatement.BREAK);
@@ -451,6 +457,11 @@ public class StatementMaker {
 
             SwitchStatementMaker.removeExhaustiveDefaultBlock(switchStatement);
             stack.push(new SwitchExpression(condition.getLineNumber(), valueType, switchStatement));
+        }
+
+        if (condition instanceof ClassFileSwitchIndexExpression) {
+            // Java 21+ pattern matching 'switch': restore the pattern labels when possible
+            SwitchStatementMaker.makePatternSwitch(statements, switchStatement, majorVersion, valueType == null);
         }
 
         if (!nextIsDefaultBlock) {

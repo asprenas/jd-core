@@ -395,6 +395,13 @@ public abstract class AbstractJavaSyntaxVisitor extends AbstractTypeArgumentVisi
     }
 
     @Override
+    public void visit(TypePatternExpression expression) {
+        BaseType type = expression.getType();
+        type.accept(this);
+        safeAccept(expression.getVariable());
+    }
+
+    @Override
     public void visit(TernaryOperatorExpression expression) {
         expression.getCondition().accept(this);
         expression.getTrueExpression().accept(this);
