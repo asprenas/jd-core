@@ -1,0 +1,21 @@
+# Phase 1-1: every switch expression branch must return the original value
+enumSwitch MONDAY
+enumSwitch TUESDAY
+enumSwitch THURSDAY
+enumSwitch WEDNESDAY
+stringSwitch a
+stringSwitch c
+stringSwitch z
+oldStyleYield 1
+oldStyleYield 3
+oldStyleYield 9
+nested 0 0
+nested 0 5
+nested 4 0
+asArgument 1
+asArgument 2
+inExpression SUNDAY
+inExpression MONDAY
+withTryCatch ""
+withTryCatch 42
+withTryCatch x

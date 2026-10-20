@@ -781,12 +781,17 @@ public class ControlFlowGraphReducer {
                 if (predecessors.size() == 1) {
                     tryWithResourcesFlag = false;
                 } else {
-                    assert predecessors.size() == 2;
+                    if (predecessors.size() != 2) {
+                        // Not an assert: the result must not depend on -ea. The caller falls back to byte code output.
+                        throw new IllegalStateException("reduceTryDeclaration : unexpected try-with-resources predecessors");
+                    }
 
                     if (tryWithResourcesBB == null) {
                         for (BasicBlock predecessor : predecessors) {
                             if (predecessor != basicBlock) {
-                                assert predecessor.getType() == TYPE_TRY_DECLARATION;
+                                if (predecessor.getType() != TYPE_TRY_DECLARATION) {
+                                    throw new IllegalStateException("reduceTryDeclaration : unexpected try-with-resources predecessor");
+                                }
                                 tryWithResourcesBB = predecessor;
                                 break;
                             }

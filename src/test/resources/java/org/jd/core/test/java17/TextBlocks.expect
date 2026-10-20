@@ -1,0 +1,3 @@
+# Text block content must stay identical (rendered as a plain string literal for now)
++ "<html>\n    <body>\n        <p>Hello, \"world\"</p>\n    </body>\n</html>\n"
++ "line1\nline2"

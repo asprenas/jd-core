@@ -397,7 +397,10 @@ public class StatementMaker {
         tryStatements = makeSubStatements(watchdog, basicBlock.getSub1(), statements, jumps);
 
         for (ExceptionHandler exceptionHandler : basicBlock.getExceptionHandlers()) {
-            assert stack.size() == assertStackSize : "parseTry : problem with stack";
+            if (stack.size() != assertStackSize) {
+                // Not an assert: the result must not depend on -ea. The caller falls back to byte code output.
+                throw new IllegalStateException("parseTry : problem with stack");
+            }
 
             if (exceptionHandler.getInternalThrowableName() == null) {
                 // 'finally' handler

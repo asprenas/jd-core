@@ -17,7 +17,10 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.io.BufferedReader;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -26,8 +29,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.regex.Pattern;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -94,15 +98,116 @@ public class JavaLanguageVersionTest {
         System.out.println(source);
         System.out.println("- - - - - - - - ");
 
-        assertFalse(source.contains("// Byte code:"), internalName + ": decompiler fell back to byte code output");
+        // Every check runs and the test reports all problems at once, so one failure does not hide another
+        // (e.g. a byte code fallback hiding a switch expression that lost its values).
+        List<String> problems = new ArrayList<>();
+        List<String> details = new ArrayList<>();
 
-        // Not a pass: the recompilation check cannot run on an older JDK, report the test as skipped.
-        assumeTrue(runtimeFeatureVersion() >= version, internalName + ": recompilation needs a JDK " + version + "+");
+        boolean fallback = source.contains("// Byte code:");
+        if (fallback) {
+            problems.add("decompiler fell back to byte code output");
+        }
 
-        String release = (version == 8) ? "1.8" : String.valueOf(version);
+        // 1. Output patterns: results that recompile but are wrong
+        List<String> violations = checkExpectations(version, internalName, source);
+        if (!violations.isEmpty()) {
+            problems.add("output does not match " + expectResource(version, internalName));
+            details.addAll(violations);
+        }
 
-        assertTrue(CompilerUtil.compile(release, new JavaSourceFileObject(internalName, source)),
-            internalName + ": decompiled source does not recompile (see standard error)");
+        // 2. Recompilation, 3. same results as the original class
+        if (!fallback) {
+            if (runtimeFeatureVersion() < version) {
+                // Not a pass: the recompilation check cannot run on an older JDK, report the test as skipped.
+                assumeTrue(!problems.isEmpty(), internalName + ": recompilation needs a JDK " + version + "+");
+            } else {
+                String release = (version == 8) ? "1.8" : String.valueOf(version);
+
+                if (!CompilerUtil.compile(release, new JavaSourceFileObject(internalName, source))) {
+                    problems.add("decompiled source does not recompile (see standard error)");
+                } else {
+                    List<String> differences = RunComparison.compare(runResource(version, internalName), (ZipLoader)loader, internalName);
+                    if (!differences.isEmpty()) {
+                        problems.add("recompiled class behaves differently, see " + runResource(version, internalName));
+                        details.addAll(differences);
+                    }
+                }
+            }
+        }
+
+        if (!problems.isEmpty()) {
+            StringBuilder message = new StringBuilder(internalName).append(": ").append(String.join("; ", problems));
+            for (String detail : details) {
+                message.append("\n  ").append(detail);
+            }
+            fail(message.toString());
+        }
+    }
+
+    private static String runResource(int version, String internalName) {
+        return "/java/org/jd/core/test/java" + version + "/" + internalName.substring(internalName.lastIndexOf('/') + 1) + ".run";
+    }
+
+    /**
+     * Optional expectations next to the sample source: java&lt;N&gt;/&lt;Sample&gt;.expect, one rule per line,
+     * '#' starts a comment.
+     *
+     *   + text     the output must contain text
+     *   - text     the output must not contain text
+     *   ~ regex    the output must contain a match of regex
+     *
+     * The same file applies to every compiler variant of the sample (data-java-language-N.zip, -javacM.zip).
+     */
+    private static List<String> checkExpectations(int version, String internalName, String source) throws Exception {
+        List<String> violations = new ArrayList<>();
+        String resource = expectResource(version, internalName);
+
+        try (InputStream is = JavaLanguageVersionTest.class.getResourceAsStream(resource)) {
+            if (is == null) {
+                return violations;
+            }
+
+            BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8));
+            String line;
+
+            while ((line = reader.readLine()) != null) {
+                if (line.trim().isEmpty() || line.startsWith("#")) {
+                    continue;
+                }
+
+                if (line.length() < 3 || line.charAt(1) != ' ') {
+                    throw new IllegalArgumentException(resource + ": invalid rule '" + line + "'");
+                }
+
+                String value = line.substring(2);
+
+                switch (line.charAt(0)) {
+                    case '+':
+                        if (!source.contains(value)) {
+                            violations.add("missing:   " + value);
+                        }
+                        break;
+                    case '-':
+                        if (source.contains(value)) {
+                            violations.add("unwanted:  " + value);
+                        }
+                        break;
+                    case '~':
+                        if (!Pattern.compile(value).matcher(source).find()) {
+                            violations.add("no match:  " + value);
+                        }
+                        break;
+                    default:
+                        throw new IllegalArgumentException(resource + ": invalid rule '" + line + "'");
+                }
+            }
+        }
+
+        return violations;
+    }
+
+    private static String expectResource(int version, String internalName) {
+        return "/java/org/jd/core/test/java" + version + "/" + internalName.substring(internalName.lastIndexOf('/') + 1) + ".expect";
     }
 
     private static int runtimeFeatureVersion() {
