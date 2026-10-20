@@ -1,0 +1,3 @@
+# Binding is rebuilt as instanceof + cast for now (Phase 4-1 switches this to a pattern)
+~ instanceof String
++ .length()

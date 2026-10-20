@@ -1,0 +1,25 @@
+# Phase 1-1: every case value of a switch expression must survive (yield or -> form)
+# enumSwitch
+~ (yield|->)\s*6;
+~ (yield|->)\s*7;
+~ (yield|->)\s*8;
+~ (yield|->)\s*9;
+# stringSwitch
++ "first"
++ new IllegalArgumentException(s)
+# oldStyleYield
+~ (yield|->)\s*10;
+# nested / asArgument
+~ (yield|->)\s*1;
+~ (yield|->)\s*2;
+~ (yield|->)\s*5;
+# inExpression
++ "weekend"
++ "weekday"
+# assignToVariable
++ "one"
++ "two"
++ "many"
+# javac default branch of an exhaustive enum switch
+- IncompatibleClassChangeError
+- MatchException

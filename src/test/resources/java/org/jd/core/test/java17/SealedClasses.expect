@@ -1,0 +1,5 @@
+# Phase 3-4: sealed / non-sealed / permits
+~ sealed interface Shape
++ permits
+~ non-sealed class Truck
+- extends Record

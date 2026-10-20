@@ -1,0 +1,3 @@
+# Resources must still be closed (JDK 11+ try-with-resources is desugared for now, Phase 4-4)
++ .close();
+- $closeResource

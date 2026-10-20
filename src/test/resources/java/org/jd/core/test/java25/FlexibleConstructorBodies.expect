@@ -1,0 +1,7 @@
+# Phase 1-3: statements before super(...) / this(...) must be kept
++ throw new IllegalArgumentException("empty")
+~ String trimmed = name\.trim\(\);
+~ int clamped = Math\.max\(size, 0\);
++ name.toUpperCase()
+~ int doubled = a \* 2;
++ new StringBuilder()

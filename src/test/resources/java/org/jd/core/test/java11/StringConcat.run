@@ -1,0 +1,12 @@
+# Phase 0-3 pilot: original vs recompiled results
+simple a 1
+constants x
+mixed s c 2 1.5 true obj
+specialCharacters s
+compound s
+loop 3
+fields
+nested a b
+withMethodCalls abc
+ternaryOperand true x
+ternaryOperand false x

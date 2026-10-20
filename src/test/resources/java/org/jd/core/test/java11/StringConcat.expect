@@ -1,0 +1,10 @@
+# invokedynamic makeConcatWithConstants (StringConcatenationUtil)
++ return "<" + a + ">";
+~ return a \+ b;
+# argument order: a recipe starting with \u0001 must not reuse the first argument
+~ return this\.name \+ ":" \+ this\.count \+ ":" \+ this\.name;
+# javac may wrap an Object argument in String.valueOf (same result)
+~ return s \+ c \+ l \+ d \+ z \+ (o|String\.valueOf\(o\)) \+ "1x21\.5null";
+# \u0002 constant tag (bootstrap argument): the \u0001 character must be restored
+~ return s \+ "\\(u0001|001)
++ "value=" + o.hashCode() + "/"

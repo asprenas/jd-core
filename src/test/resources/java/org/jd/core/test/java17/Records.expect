@@ -1,0 +1,4 @@
+# Phase 3-2: record declarations
+~ record Point\(int x, int y\)
+~ record Pair<A, B>\(A first, B second\)
+- extends Record

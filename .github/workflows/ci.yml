@@ -30,6 +30,50 @@ jobs:
       - uses: gradle/actions/setup-gradle@v6
       - name: Build with Gradle Wrapper
         run: ./gradlew build
+      # Java language samples (JavaLanguageVersionTest): report only, many samples fail until the
+      # decompiler supports the feature. Stays inside the build job so the required check names do not change.
+      - name: Java language samples (report only)
+        if: matrix.java == 25
+        continue-on-error: true
+        env:
+          JDCORE_SAMPLES: all
+        run: ./gradlew test --tests org.jd.core.v1.JavaLanguageVersionTest
+      - name: Java language samples summary
+        if: matrix.java == 25 && always()
+        run: |
+          xml=build/test-results/test/TEST-org.jd.core.v1.JavaLanguageVersionTest.xml
+          if [ ! -f "$xml" ]; then echo "No sample results" >> "$GITHUB_STEP_SUMMARY"; exit 0; fi
+          python3 - "$xml" >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          import sys, xml.etree.ElementTree as ET
+          suite = ET.parse(sys.argv[1]).getroot()
+          rows = []
+          for case in suite.iter('testcase'):
+              name = case.get('name').split('] ', 1)[-1]
+              failure = case.find('failure')
+              if failure is not None:
+                  message = (failure.get('message') or '').split('\n')[0].split(' ==>')[0]
+                  message = message.replace('org.opentest4j.AssertionFailedError: ', '').split(': ', 1)[-1]
+                  message = message.replace('|', '\\|')[:160]
+                  rows.append((name, 'fail', message))
+              elif case.find('skipped') is not None:
+                  rows.append((name, 'skip', ''))
+              else:
+                  rows.append((name, 'pass', ''))
+          count = lambda s: sum(1 for r in rows if r[1] == s)
+          print('## Java language samples (JDK 25)\n')
+          print(f"{count('pass')} pass / {count('fail')} fail / {count('skip')} skip of {len(rows)}\n")
+          print('| Sample | Result | Reason |\n|---|---|---|')
+          for name, result, message in rows:
+              print(f'| {name} | {result} | {message} |')
+          EOF
+      - name: Upload Java language sample reports
+        if: matrix.java == 25 && always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: java-language-samples
+          path: |
+            build/reports/tests/test/
+            build/test-results/test/TEST-org.jd.core.v1.JavaLanguageVersionTest.xml
       - name: Upload test reports
         if: failure()
         uses: actions/upload-artifact@v7
