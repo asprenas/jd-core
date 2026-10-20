@@ -1292,7 +1292,12 @@ public class ByteCodeParser {
         if ("makeConcatWithConstants".equals(indyMethodName)) {
             // Create Java 9+ string concatenation
             String recipe = constants.getConstantString(bootstrapArguments[0]);
-            stack.push(StringConcatenationUtil.create(recipe, indyParameters));
+            // Values of the \u0002 tags of the recipe: javac only uses them for String literals containing \u0001 or \u0002
+            String[] recipeConstants = new String[bootstrapArguments.length - 1];
+            for (int i = 0; i < recipeConstants.length; i++) {
+                recipeConstants[i] = constants.getConstantString(bootstrapArguments[i + 1]);
+            }
+            stack.push(StringConcatenationUtil.create(recipe, recipeConstants, indyParameters));
             return;
         } else if ("makeConcat".equals(indyMethodName)) {
             // Create Java 9+ string concatenation
