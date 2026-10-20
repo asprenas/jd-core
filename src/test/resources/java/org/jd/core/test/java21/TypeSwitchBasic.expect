@@ -1,0 +1,5 @@
+# Phase 2: no SwitchBootstraps call left in the output (Phase 3 restores the pattern syntax)
+- typeSwitch
+- enumSwitch
++ instanceof Integer
++ Coin.HEADS

@@ -22,6 +22,7 @@ public abstract class Constant {
     public static final byte CONSTANT_NameAndType        = 12;
     public static final byte CONSTANT_MethodHandle       = 15;
     public static final byte CONSTANT_MethodType         = 16;
+    public static final byte CONSTANT_Dynamic            = 17;
     public static final byte CONSTANT_InvokeDynamic      = 18;
     public static final byte CONSTANT_MemberRef          = 19; // Unofficial constant
 

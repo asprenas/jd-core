@@ -1,0 +1,12 @@
+# Phase 2: invokedynamic SwitchBootstraps rewritten as an index expression, results must not change
+describe abc
+describe null
+strings a
+strings bb
+strings hello
+boxed 1
+boxed 2
+boxed 7
+enumPattern HEADS
+enumPattern TAILS
+statement abc
