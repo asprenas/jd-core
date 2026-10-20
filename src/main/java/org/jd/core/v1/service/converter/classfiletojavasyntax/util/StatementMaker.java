@@ -91,6 +91,15 @@ public class StatementMaker {
             // 'selector instanceof R(...);' is the label of a pattern switch: it must have been moved to the label
             SwitchStatementMaker.checkRecordPatternStatements(statements);
         }
+        if (cfg.getSwitchArguments() != null) {
+            // Rewritten pattern switch (RecordPatternSwitchMaker): an assignment of its restart variable left means
+            // that the switch was not understood
+            for (Integer key : cfg.getSwitchArguments().keySet()) {
+                if (key < 0) {
+                    SwitchStatementMaker.checkNoAssignment(statements, -1 - key);
+                }
+            }
+        }
 
         // Remove 'finally' statements
         if (removeFinallyStatementsFlag) {

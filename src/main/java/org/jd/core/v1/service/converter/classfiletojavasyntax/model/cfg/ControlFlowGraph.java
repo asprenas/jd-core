@@ -23,6 +23,7 @@ public class ControlFlowGraph {
     };
     protected int[] offsetToLineNumbers = null;
     protected Map<Integer, RecordPatternMaker.Region> recordPatterns;
+    protected Map<Integer, int[]> switchArguments;
 
     public ControlFlowGraph(Method method) {
         this.method = method;
@@ -35,6 +36,15 @@ public class ControlFlowGraph {
 
     public void setRecordPatterns(Map<Integer, RecordPatternMaker.Region> recordPatterns) {
         this.recordPatterns = recordPatterns;
+    }
+
+    /** Bootstrap arguments replacing the labels of the 'typeSwitch' call at an offset (see RecordPatternSwitchMaker), or null */
+    public Map<Integer, int[]> getSwitchArguments() {
+        return switchArguments;
+    }
+
+    public void setSwitchArguments(Map<Integer, int[]> switchArguments) {
+        this.switchArguments = switchArguments;
     }
 
     public Method getMethod() {

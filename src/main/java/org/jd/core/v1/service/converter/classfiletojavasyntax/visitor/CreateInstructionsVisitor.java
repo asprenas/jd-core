@@ -20,6 +20,7 @@ import org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.d
 import org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.declaration.ClassFileConstructorOrMethodDeclaration;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.util.*;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -123,11 +124,13 @@ public class CreateInstructionsVisitor extends AbstractJavaSyntaxVisitor {
             CodeException[] exceptionTable = attributeCode.getExceptionTable();
 
             try {
-                Map<Integer, RecordPatternMaker.Region> recordPatterns = RecordPatternMaker.make(method, classFile.getMajorVersion());
+                HashMap<Integer, int[]> switchArguments = new HashMap<>();
+                Map<Integer, RecordPatternMaker.Region> recordPatterns = RecordPatternMaker.make(classFile, method, switchArguments);
                 ControlFlowGraph cfg = ControlFlowGraphMaker.make(method);
 
                 if (cfg != null) {
                     cfg.setRecordPatterns(recordPatterns);
+                    cfg.setSwitchArguments(switchArguments.isEmpty() ? null : switchArguments);
                     ControlFlowGraphGotoReducer.reduce(cfg);
                     ControlFlowGraphPatternSwitchReducer.reduce(cfg);
                     ControlFlowGraphLoopReducer.reduce(cfg);

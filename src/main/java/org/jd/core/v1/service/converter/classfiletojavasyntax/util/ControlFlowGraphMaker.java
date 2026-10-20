@@ -200,6 +200,11 @@ public class ControlFlowGraphMaker {
 
                         offset = (i - 1);
                         types[offset] = 's';
+                        // The instruction that immediately follows a switch is a leader (javac always puts a case there, not
+                        // the rewritten code of a pattern switch, see RecordPatternSwitchMaker)
+                        if (offset + 1 < length) {
+                            map[offset + 1] = MARK;
+                        }
                         switchValues[offset] = values;
                         switchOffsets[offset] = offsets;
                         lastStatementOffset = offset;
@@ -226,6 +231,11 @@ public class ControlFlowGraphMaker {
 
                         offset = (i - 1);
                         types[offset] = 's';
+                        // The instruction that immediately follows a switch is a leader (javac always puts a case there, not
+                        // the rewritten code of a pattern switch, see RecordPatternSwitchMaker)
+                        if (offset + 1 < length) {
+                            map[offset + 1] = MARK;
+                        }
                         switchValues[offset] = values;
                         switchOffsets[offset] = offsets;
                         lastStatementOffset = offset;
