@@ -1,0 +1,2 @@
+# anonymous class type: only var can declare the local variable (Phase 4-6 a)
+~ var \w+ = new Object\(\) \{
