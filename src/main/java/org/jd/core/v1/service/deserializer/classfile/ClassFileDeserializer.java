@@ -62,7 +62,13 @@ public class ClassFileDeserializer {
                 String innerTypeName = ic.getInnerTypeName();
 
                 if (!internalTypeName.equals(innerTypeName)) {
-                    if (internalTypeName.equals(ic.getOuterTypeName()) || innerTypeName.startsWith(innerTypePrefix)) {
+                    // Member types declared in this type, local and anonymous types (no outer type) directly in
+                    // this type. A member of a nested type (Outer$Nested$Member, outer type Outer$Nested) is loaded
+                    // with Outer$Nested, not a second time here.
+                    boolean directLocalOrAnonymous = (ic.getOuterTypeName() == null) && innerTypeName.startsWith(innerTypePrefix) &&
+                                                     (innerTypeName.indexOf('$', innerTypePrefix.length()) == -1);
+
+                    if (internalTypeName.equals(ic.getOuterTypeName()) || directLocalOrAnonymous) {
                         ClassFile innerClassFile = innerLoadClassFile(loader, innerTypeName);
                         int flags = ic.getInnerAccessFlags();
                         int length;
@@ -240,6 +246,19 @@ public class ClassFileDeserializer {
         return methods;
     }
 
+    protected AttributeRecord.RecordComponent[] loadRecordComponents(ClassFileReader reader, ConstantPool constants) {
+        int count = reader.readUnsignedShort();
+        AttributeRecord.RecordComponent[] components = new AttributeRecord.RecordComponent[count];
+
+        for (int i=0; i<count; i++) {
+            String name = constants.getConstantUtf8(reader.readUnsignedShort());
+            String descriptor = constants.getConstantUtf8(reader.readUnsignedShort());
+            components[i] = new AttributeRecord.RecordComponent(name, descriptor, loadAttributes(reader, constants));
+        }
+
+        return components;
+    }
+
     protected HashMap<String, Attribute> loadAttributes(ClassFileReader reader, ConstantPool constants) {
         int count = reader.readUnsignedShort();
         if (count == 0)
@@ -311,6 +330,23 @@ public class ClassFileDeserializer {
                         break;
                     case "ModulePackages":
                         attributes.put(name, new AttributeModulePackages(loadConstantClassNames(reader, constants)));
+                        break;
+                    case "EnclosingMethod":
+                        String enclosingTypeName = constants.getConstantTypeName(reader.readUnsignedShort());
+                        int methodIndex = reader.readUnsignedShort();
+                        if (methodIndex == 0) {
+                            attributes.put(name, new AttributeEnclosingMethod(enclosingTypeName, null, null));
+                        } else {
+                            ConstantNameAndType cnat = constants.getConstant(methodIndex);
+                            attributes.put(name, new AttributeEnclosingMethod(enclosingTypeName,
+                                constants.getConstantUtf8(cnat.getNameIndex()), constants.getConstantUtf8(cnat.getDescriptorIndex())));
+                        }
+                        break;
+                    case "PermittedSubclasses":
+                        attributes.put(name, new AttributePermittedSubclasses(loadConstantClassNames(reader, constants)));
+                        break;
+                    case "Record":
+                        attributes.put(name, new AttributeRecord(loadRecordComponents(reader, constants)));
                         break;
                     case "ModuleMainClass":
                         attributes.put(name, new AttributeModuleMainClass(constants.getConstant(reader.readUnsignedShort())));

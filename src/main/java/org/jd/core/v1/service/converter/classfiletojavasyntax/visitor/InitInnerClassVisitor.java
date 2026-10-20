@@ -8,6 +8,8 @@
 package org.jd.core.v1.service.converter.classfiletojavasyntax.visitor;
 
 import org.jd.core.v1.model.classfile.ClassFile;
+import org.jd.core.v1.model.classfile.Method;
+import org.jd.core.v1.model.classfile.attribute.AttributeEnclosingMethod;
 import org.jd.core.v1.model.javasyntax.AbstractJavaSyntaxVisitor;
 import org.jd.core.v1.model.javasyntax.declaration.*;
 import org.jd.core.v1.model.javasyntax.expression.*;
@@ -27,6 +29,8 @@ import org.jd.core.v1.util.DefaultList;
 import java.util.*;
 
 import static org.jd.core.v1.model.classfile.Constants.ACC_STATIC;
+import static org.jd.core.v1.model.javasyntax.declaration.Declaration.FLAG_FINAL;
+import static org.jd.core.v1.model.javasyntax.declaration.Declaration.FLAG_STATIC;
 import static org.jd.core.v1.model.javasyntax.declaration.Declaration.FLAG_SYNTHETIC;
 
 public class InitInnerClassVisitor extends AbstractJavaSyntaxVisitor {
@@ -377,6 +381,8 @@ public class InitInnerClassVisitor extends AbstractJavaSyntaxVisitor {
                 localClassDeclarations.sort(new MemberDeclarationComparator());
                 declaration.accept(new AddLocalClassDeclarationVisitor());
             }
+
+            addLocalTypesWithoutNewExpression((ClassFileConstructorDeclaration)declaration);
         }
 
         @Override
@@ -399,6 +405,71 @@ public class InitInnerClassVisitor extends AbstractJavaSyntaxVisitor {
                 localClassDeclarations.sort(new MemberDeclarationComparator());
                 declaration.accept(new AddLocalClassDeclarationVisitor());
             }
+
+            addLocalTypesWithoutNewExpression((ClassFileMethodDeclaration)declaration);
+        }
+
+        /**
+         * Local enums, interfaces and records that are never instantiated with 'new' in the method (a local
+         * enum or interface never is): found with their EnclosingMethod attribute, declared at the start of
+         * the method.
+         */
+        @SuppressWarnings("unchecked")
+        protected void addLocalTypesWithoutNewExpression(ClassFileConstructorOrMethodDeclaration declaration) {
+            List<ClassFileTypeDeclaration> innerTypeDeclarations = bodyDeclaration.getInnerTypeDeclarations();
+
+            if ((innerTypeDeclarations == null) || (declaration.getStatements() == null)) {
+                return;
+            }
+
+            Method method = declaration.getMethod();
+            Statements localTypes = new Statements();
+
+            for (ClassFileTypeDeclaration typeDeclaration : innerTypeDeclarations) {
+                TypeDeclaration td = (TypeDeclaration)typeDeclaration;
+
+                if (((td.getFlags() & FLAG_SYNTHETIC) == 0) || (typeDeclaration.getBodyDeclaration() == null)) {
+                    continue;
+                }
+
+                ClassFile innerClassFile = ((ClassFileBodyDeclaration)typeDeclaration.getBodyDeclaration()).getClassFile();
+                AttributeEnclosingMethod enclosingMethod = innerClassFile.getAttribute("EnclosingMethod");
+                String internalTypeName = innerClassFile.getInternalTypeName();
+                String simpleName = internalTypeName.substring(internalTypeName.lastIndexOf('$') + 1);
+
+                if ((enclosingMethod != null) && method.getName().equals(enclosingMethod.getMethodName()) &&
+                    method.getDescriptor().equals(enclosingMethod.getMethodDescriptor()) && isLocalTypeName(simpleName)) {
+                    td.setFlags(td.getFlags() & ~(FLAG_SYNTHETIC|FLAG_STATIC|FLAG_FINAL));
+                    localTypes.add(new TypeDeclarationStatement(td));
+                }
+            }
+
+            if (!localTypes.isEmpty()) {
+                // Declared in the method only, not also as a member
+                for (Statement statement : localTypes) {
+                    bodyDeclaration.removeInnerType(((TypeDeclarationStatement)statement).getTypeDeclaration().getInternalTypeName());
+                }
+
+                BaseStatement statements = declaration.getStatements();
+
+                if (statements.isList()) {
+                    localTypes.addAll(statements.getList());
+                } else {
+                    localTypes.add(statements.getFirst());
+                }
+                declaration.setStatements(localTypes);
+            }
+        }
+
+        /** Local type '1Name' (an anonymous class is only digits) */
+        protected boolean isLocalTypeName(String simpleName) {
+            int i = 0;
+
+            while ((i < simpleName.length()) && Character.isDigit(simpleName.charAt(i))) {
+                i++;
+            }
+
+            return (i > 0) && (i < simpleName.length());
         }
 
         @Override

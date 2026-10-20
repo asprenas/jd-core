@@ -32,6 +32,10 @@ public abstract class TypeDeclaration implements BaseTypeDeclaration, MemberDecl
         return flags;
     }
 
+    public void setFlags(int flags) {
+        this.flags = flags;
+    }
+
     public String getInternalTypeName() {
         return internalTypeName;
     }

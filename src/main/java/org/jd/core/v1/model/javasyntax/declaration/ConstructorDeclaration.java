@@ -57,6 +57,17 @@ public class ConstructorDeclaration implements MemberDeclaration {
         return typeParameters;
     }
 
+    // Java 16+ compact canonical constructor of a record: printed without parameters
+    protected boolean compactCanonical;
+
+    public boolean isCompactCanonical() {
+        return compactCanonical;
+    }
+
+    public void setCompactCanonical(boolean compactCanonical) {
+        this.compactCanonical = compactCanonical;
+    }
+
     public BaseFormalParameter getFormalParameters() {
         return formalParameters;
     }

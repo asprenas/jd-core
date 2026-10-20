@@ -34,6 +34,26 @@ public class InterfaceDeclaration extends TypeDeclaration {
         return interfaces;
     }
 
+    // Java 17+ sealed types: 'sealed ... permits <permittedSubtypes>', or 'non-sealed'
+    protected BaseType permittedSubtypes;
+    protected boolean nonSealed;
+
+    public BaseType getPermittedSubtypes() {
+        return permittedSubtypes;
+    }
+
+    public void setPermittedSubtypes(BaseType permittedSubtypes) {
+        this.permittedSubtypes = permittedSubtypes;
+    }
+
+    public boolean isNonSealed() {
+        return nonSealed;
+    }
+
+    public void setNonSealed(boolean nonSealed) {
+        this.nonSealed = nonSealed;
+    }
+
     @Override
     public void accept(DeclarationVisitor visitor) {
         visitor.visit(this);

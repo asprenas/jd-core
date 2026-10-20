@@ -10,6 +10,7 @@ package org.jd.core.v1.service.converter.classfiletojavasyntax.visitor;
 import org.jd.core.v1.model.javasyntax.AbstractJavaSyntaxVisitor;
 import org.jd.core.v1.model.javasyntax.declaration.*;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.declaration.ClassFileBodyDeclaration;
+import org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.declaration.ClassFileClassDeclaration;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.declaration.ClassFileEnumDeclaration;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.util.TypeMaker;
 
@@ -17,6 +18,7 @@ public class UpdateJavaSyntaxTreeStep2Visitor extends AbstractJavaSyntaxVisitor 
     protected static final AggregateFieldsVisitor AGGREGATE_FIELDS_VISITOR = new AggregateFieldsVisitor();
     protected static final SortMembersVisitor SORT_MEMBERS_VISITOR = new SortMembersVisitor();
     protected static final AutoboxingVisitor AUTOBOXING_VISITOR = new AutoboxingVisitor();
+    protected static final UpdateRecordDeclarationVisitor UPDATE_RECORD_DECLARATION_VISITOR = new UpdateRecordDeclarationVisitor();
 
     protected InitStaticFieldVisitor initStaticFieldVisitor = new InitStaticFieldVisitor();
     protected InitInstanceFieldVisitor initInstanceFieldVisitor = new InitInstanceFieldVisitor();
@@ -26,6 +28,7 @@ public class UpdateJavaSyntaxTreeStep2Visitor extends AbstractJavaSyntaxVisitor 
     protected UpdateBridgeMethodVisitor replaceBridgeMethodVisitor;
     protected InitInnerClassVisitor.UpdateNewExpressionVisitor initInnerClassStep2Visitor;
     protected AddCastExpressionVisitor addCastExpressionVisitor;
+    protected UpdateSealedDeclarationVisitor updateSealedDeclarationVisitor;
 
     protected TypeDeclaration typeDeclaration;
 
@@ -33,6 +36,7 @@ public class UpdateJavaSyntaxTreeStep2Visitor extends AbstractJavaSyntaxVisitor 
         this.replaceBridgeMethodVisitor = new UpdateBridgeMethodVisitor(typeMaker);
         this.initInnerClassStep2Visitor = new InitInnerClassVisitor.UpdateNewExpressionVisitor(typeMaker);
         this.addCastExpressionVisitor = new AddCastExpressionVisitor(typeMaker);
+        this.updateSealedDeclarationVisitor = new UpdateSealedDeclarationVisitor(typeMaker);
     }
 
     @Override
@@ -83,12 +87,20 @@ public class UpdateJavaSyntaxTreeStep2Visitor extends AbstractJavaSyntaxVisitor 
     public void visit(ClassDeclaration declaration) {
         this.typeDeclaration = declaration;
         safeAccept(declaration.getBodyDeclaration());
+
+        if (declaration.getBodyDeclaration() != null) {
+            // Java 16+ record, Java 17+ sealed class
+            UPDATE_RECORD_DECLARATION_VISITOR.visit((ClassFileClassDeclaration)declaration);
+            updateSealedDeclarationVisitor.visit(declaration);
+        }
     }
 
     @Override
     public void visit(InterfaceDeclaration declaration) {
         this.typeDeclaration = declaration;
         safeAccept(declaration.getBodyDeclaration());
+        // Java 17+ sealed interface
+        updateSealedDeclarationVisitor.visit(declaration);
     }
 
     @Override

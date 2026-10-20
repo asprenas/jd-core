@@ -28,6 +28,21 @@ public class ClassDeclaration extends InterfaceDeclaration {
         return superType;
     }
 
+    // Java 16+ record: the record components (printed as the record header), null for a class
+    protected BaseFormalParameter recordComponents;
+
+    public BaseFormalParameter getRecordComponents() {
+        return recordComponents;
+    }
+
+    public void setRecordComponents(BaseFormalParameter recordComponents) {
+        this.recordComponents = recordComponents;
+    }
+
+    public boolean isRecord() {
+        return recordComponents != null;
+    }
+
     @Override
     public boolean isClassDeclaration() { return true; }
 
