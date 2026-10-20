@@ -11,6 +11,7 @@ import org.jd.core.v1.model.javasyntax.type.Type;
 
 public class LocalVariableDeclaration implements Declaration {
     protected boolean fina1 = false;
+    protected boolean var = false; // 'var' instead of the type (Java 10+)
     protected Type type;
     protected BaseLocalVariableDeclarator localVariableDeclarators;
 
@@ -25,6 +26,14 @@ public class LocalVariableDeclaration implements Declaration {
 
     public void setFinal(boolean fina1) {
         this.fina1 = fina1;
+    }
+
+    public boolean isVar() {
+        return var;
+    }
+
+    public void setVar(boolean var) {
+        this.var = var;
     }
 
     public Type getType() {

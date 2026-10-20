@@ -752,6 +752,7 @@ public class ByteCodeParser {
                         if (expression1.isLocalVariableReferenceExpression()) {
                             ((ClassFileLocalVariableReferenceExpression)expression1).getLocalVariable().typeOnLeft(typeBounds, ot);
                         }
+                        checkAnonymousTypeReceiver(expression1, ot);
                         if (opcode == 185) { // INVOKEINTERFACE
                             offset += 2; // Skip 'count' and one byte
                         }
@@ -1762,6 +1763,7 @@ public class ByteCodeParser {
         String descriptor = constants.getConstantUtf8(constantNameAndType.getDescriptorIndex());
         Type type = makeFieldType(ot.getInternalName(), name, descriptor);
         Expression objectRef = stack.pop();
+        checkAnonymousTypeReceiver(objectRef, ot);
         stack.push(typeParametersToTypeArgumentsBinder.newFieldReferenceExpression(lineNumber, type, getFieldInstanceReference(objectRef, ot,  name), ot, name, descriptor));
     }
 
@@ -1775,6 +1777,7 @@ public class ByteCodeParser {
         Type type = makeFieldType(ot.getInternalName(), name, descriptor);
         Expression valueRef = stack.pop();
         Expression objectRef = stack.pop();
+        checkAnonymousTypeReceiver(objectRef, ot);
         FieldReferenceExpression fieldRef = typeParametersToTypeArgumentsBinder.newFieldReferenceExpression(lineNumber, type, getFieldInstanceReference(objectRef, ot,  name), ot, name, descriptor);
         parsePUT(statements, stack, lineNumber, fieldRef, valueRef);
     }
@@ -2026,6 +2029,13 @@ public class ByteCodeParser {
         }
 
         return expression;
+    }
+
+    /** Member of an anonymous class accessed through a local variable: the variable must be declared with 'var'. */
+    private static void checkAnonymousTypeReceiver(Expression expression, ObjectType ot) {
+        if (expression.isLocalVariableReferenceExpression() && (ot.getQualifiedName() == null) && (ot.getName() == null)) {
+            ((ClassFileLocalVariableReferenceExpression)expression).getLocalVariable().setAnonymousTypeRequired(true);
+        }
     }
 
     private static void checkStack(DefaultStack<Expression> stack, byte[] code, int offset) {

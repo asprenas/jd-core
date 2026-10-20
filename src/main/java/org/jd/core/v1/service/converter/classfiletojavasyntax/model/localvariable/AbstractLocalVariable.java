@@ -18,6 +18,7 @@ public abstract class AbstractLocalVariable {
     protected Frame frame;
     protected AbstractLocalVariable next;
     protected boolean declared;
+    protected boolean anonymousTypeRequired; // A member of the anonymous class is accessed: only 'var' can declare it
     protected int index;
     protected int fromOffset;
     protected int toOffset;
@@ -45,6 +46,8 @@ public abstract class AbstractLocalVariable {
     public void setNext(AbstractLocalVariable next) { this.next = next; }
 
     public boolean isDeclared() { return declared; }
+    public boolean isAnonymousTypeRequired() { return anonymousTypeRequired; }
+    public void setAnonymousTypeRequired(boolean anonymousTypeRequired) { this.anonymousTypeRequired = anonymousTypeRequired; }
     public void setDeclared(boolean declared) { this.declared = declared; }
 
     public int getIndex() { return index; }

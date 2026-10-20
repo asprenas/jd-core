@@ -561,7 +561,14 @@ public class Frame {
             variableInitializer = new ExpressionVariableInitializer(boe.getRightExpression());
         }
 
-        return new LocalVariableDeclarationStatement(type, new ClassFileLocalVariableDeclarator(boe.getLineNumber(), reference.getLocalVariable(), variableInitializer));
+        LocalVariableDeclarationStatement declarationStatement = new LocalVariableDeclarationStatement(type, new ClassFileLocalVariableDeclarator(boe.getLineNumber(), reference.getLocalVariable(), variableInitializer));
+
+        if (localVariable.isAnonymousTypeRequired() && (variableInitializer instanceof ExpressionVariableInitializer)) {
+            // 'var o = new Object() { int hidden; }; o.hidden': the anonymous type can not be written
+            declarationStatement.setVar(true);
+        }
+
+        return declarationStatement;
     }
 
     @SuppressWarnings("unchecked")
