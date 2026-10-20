@@ -998,6 +998,9 @@ public class ByteCodeParser {
 
     private void parseLDC(DefaultStack<Expression> stack, ConstantPool constants, int lineNumber, Constant constant) {
         switch (constant.getTag()) {
+            case Constant.CONSTANT_Dynamic:
+                // Java 11+ dynamic constant: no source form yet, fall back to byte code output
+                throw new IllegalStateException("parseLDC : CONSTANT_Dynamic not supported");
             case Constant.CONSTANT_Integer:
                 int i = ((ConstantInteger)constant).getValue();
                 stack.push(new IntegerConstantExpression(lineNumber, PrimitiveTypeUtil.getPrimitiveTypeFromValue(i), i));
@@ -1288,6 +1291,32 @@ public class ByteCodeParser {
         BaseExpression indyParameters = extractParametersFromStack(statements, stack, indyMethodTypes.parameterTypes);
         BootstrapMethod bootstrapMethod = attributeBootstrapMethods.getBootstrapMethods()[constantMemberRef.getClassIndex()];
         int[] bootstrapArguments = bootstrapMethod.getBootstrapArguments();
+
+        // Dispatch on the bootstrap method, not on the call site name
+        InvokeDynamicMaker invokeDynamicMaker = new InvokeDynamicMaker(typeMaker, constants, attributeBootstrapMethods.getBootstrapMethods());
+        String bootstrapOwner = invokeDynamicMaker.getBootstrapMethod(bootstrapMethod)[0];
+
+        switch (bootstrapOwner) {
+            case InvokeDynamicMaker.STRING_CONCAT_FACTORY:
+            case InvokeDynamicMaker.LAMBDA_METAFACTORY:
+                break;
+            case InvokeDynamicMaker.OBJECT_METHODS:
+                // Java 16+ record toString(), hashCode() and equals(Object)
+                stack.push(invokeDynamicMaker.makeObjectMethod(lineNumber, indyMethodName, bootstrapMethod, indyParameters));
+                return;
+            case InvokeDynamicMaker.SWITCH_BOOTSTRAPS:
+                // Java 21+ pattern matching 'switch': index of the matching case label
+                if ((indyParameters != null) && indyParameters.isList() && (indyParameters.size() == 2) &&
+                    indyParameters.getList().get(1).isLocalVariableReferenceExpression()) {
+                    // The 'restart' index is an int (javac stores 0, 1, ... in it)
+                    ((ClassFileLocalVariableReferenceExpression)indyParameters.getList().get(1)).getLocalVariable().typeOnLeft(typeBounds, TYPE_INT);
+                }
+                stack.push(invokeDynamicMaker.makeSwitchIndex(lineNumber, indyMethodName, bootstrapMethod, indyParameters, indyDescriptor));
+                return;
+            default:
+                // Unknown bootstrap method: fall back to byte code output
+                throw new IllegalStateException("parseInvokeDynamic : unsupported bootstrap method " + bootstrapOwner);
+        }
 
         if ("makeConcatWithConstants".equals(indyMethodName)) {
             // Create Java 9+ string concatenation

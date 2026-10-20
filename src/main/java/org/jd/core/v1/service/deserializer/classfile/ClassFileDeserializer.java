@@ -156,7 +156,10 @@ public class ClassFileDeserializer {
                 case 8:
                     constants[i] = new ConstantString(reader.readUnsignedShort());
                     break;
-                case 9: case 10: case 11: case 17: case 18:
+                case 17:
+                    constants[i] = new ConstantDynamic(reader.readUnsignedShort(), reader.readUnsignedShort());
+                    break;
+                case 9: case 10: case 11: case 18:
                     constants[i] = new ConstantMemberRef(reader.readUnsignedShort(), reader.readUnsignedShort());
                     break;
                 case 12:
