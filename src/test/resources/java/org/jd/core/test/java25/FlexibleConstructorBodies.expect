@@ -5,3 +5,5 @@
 + name.toUpperCase()
 ~ int doubled = a \* 2;
 + new StringBuilder()
+~ String t = s \+ (FlexibleConstructorBodies\.this\.)?outerField;
+- this$0

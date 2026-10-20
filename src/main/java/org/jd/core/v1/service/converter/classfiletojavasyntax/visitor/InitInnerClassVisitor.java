@@ -88,9 +88,13 @@ public class InitInnerClassVisitor extends AbstractJavaSyntaxVisitor {
         // Search synthetic field initialization
         if (cfcd.getStatements().isList()) {
             Iterator<Statement> iterator = cfcd.getStatements().iterator();
+            // Java 25+ (JEP 513, flexible constructor bodies): source statements may precede 'super(...)',
+            // only the synthetic field initializations are removed
+            boolean flexibleConstructorBody = (classFile.getMajorVersion() >= 69);
 
             while (iterator.hasNext()) {
                 Statement statement = iterator.next();
+                boolean syntheticFieldInitialization = false;
 
                 if (statement.isExpressionStatement()) {
                     Expression expression = statement.getExpression();
@@ -109,6 +113,14 @@ public class InitInnerClassVisitor extends AbstractJavaSyntaxVisitor {
                         break;
                     }
 
+                    if (flexibleConstructorBody && isOuterInstanceNullCheck(expression)) {
+                        // javac 'Objects.requireNonNull(this$0)' on the synthetic outer instance parameter
+                        if ((outerClassFile != null) && !classFile.isStatic()) {
+                            removeFirstParameter = true;
+                        }
+                        syntheticFieldInitialization = true;
+                    }
+
                     if (expression.isBinaryOperatorExpression()) {
                         Expression e = expression.getLeftExpression();
 
@@ -118,19 +130,45 @@ public class InitInnerClassVisitor extends AbstractJavaSyntaxVisitor {
                             if (name.startsWith("this$")) {
                                 outerTypeFieldName = name;
                                 removeFirstParameter = true;
+                                syntheticFieldInitialization = true;
                             } else if (name.startsWith("val$")) {
                                 syntheticInnerFieldNames.add(name);
+                                syntheticFieldInitialization = true;
                             }
                         }
                     }
                 }
 
-                iterator.remove();
+                if (!flexibleConstructorBody || syntheticFieldInitialization) {
+                    iterator.remove();
+                }
             }
         }
 
         // Remove synthetic parameters
         BaseFormalParameter parameters = cfcd.getFormalParameters();
+
+        if (removeFirstParameter && (classFile.getMajorVersion() >= 69) && (outerClassFile != null)) {
+            // Flexible constructor body: before 'super(...)' javac reads the outer instance from the synthetic
+            // parameter, not from the field this$0. Replace the parameter by 'Outer.this'.
+            final String outerInternalTypeName = outerClassFile.getInternalTypeName();
+
+            cfcd.getStatements().accept(new AbstractUpdateExpressionVisitor() {
+                @Override
+                protected Expression updateExpression(Expression expression) {
+                    if (expression.isLocalVariableReferenceExpression() &&
+                        (((ClassFileLocalVariableReferenceExpression)expression).getLocalVariable().getIndex() == 1) &&
+                        expression.getType().isObjectType() &&
+                        outerInternalTypeName.equals(((ObjectType)expression.getType()).getInternalName())) {
+                        int lineNumber = expression.getLineNumber();
+                        ObjectType outerType = (ObjectType)expression.getType();
+                        return new FieldReferenceExpression(lineNumber, outerType, new ObjectTypeReferenceExpression(lineNumber, outerType.createType(null)),
+                            outerType.getInternalName(), "this", outerType.getDescriptor());
+                    }
+                    return expression;
+                }
+            });
+        }
 
         if (parameters != null) {
             if (parameters.isList()) {
@@ -183,6 +221,22 @@ public class InitInnerClassVisitor extends AbstractJavaSyntaxVisitor {
                 }
             }
         }
+    }
+
+    protected static boolean isOuterInstanceNullCheck(Expression expression) {
+        if (expression.isMethodInvocationExpression() && "requireNonNull".equals(expression.getName()) &&
+            "java/util/Objects".equals(expression.getInternalTypeName())) {
+            BaseExpression parameters = expression.getParameters();
+
+            if ((parameters != null) && !parameters.isList()) {
+                Expression parameter = parameters.getFirst();
+
+                return parameter.isLocalVariableReferenceExpression() &&
+                    (((ClassFileLocalVariableReferenceExpression)parameter).getLocalVariable().getIndex() == 1);
+            }
+        }
+
+        return false;
     }
 
     @Override public void visit(MethodDeclaration declaration) {}
