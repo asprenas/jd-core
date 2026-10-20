@@ -73,6 +73,16 @@ public class FlexibleConstructorBodies {
         }
     }
 
+    private String outerField = "outer";
+
+    // Non-static inner class: the synthetic this$0 initialization is removed, the source statements are kept
+    class InnerBeforeSuper extends Base {
+        InnerBeforeSuper(String s) {
+            String t = s + outerField;
+            super(t);
+        }
+    }
+
     static class TryBeforeSuper extends Base {
         TryBeforeSuper(String s) {
             int n;
