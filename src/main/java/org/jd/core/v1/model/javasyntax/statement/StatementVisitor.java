@@ -24,6 +24,7 @@ public interface StatementVisitor {
     void visit(LocalVariableDeclarationStatement statement);
     void visit(NoStatement statement);
     void visit(ReturnExpressionStatement statement);
+    void visit(YieldStatement statement);
     void visit(ReturnStatement statement);
     void visit(Statements statement);
     void visit(SwitchStatement statement);

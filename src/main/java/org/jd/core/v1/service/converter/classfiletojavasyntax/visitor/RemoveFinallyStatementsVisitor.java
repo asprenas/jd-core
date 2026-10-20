@@ -249,6 +249,7 @@ public class RemoveFinallyStatementsVisitor implements StatementVisitor {
     @Override public void visit(LocalVariableDeclarationStatement statement) {}
     @Override public void visit(NoStatement statement) {}
     @Override public void visit(ReturnExpressionStatement statement) {}
+    @Override public void visit(YieldStatement statement) {}
     @Override public void visit(ReturnStatement statement) {}
     @Override public void visit(SwitchStatement.DefaultLabel statement) {}
     @Override public void visit(SwitchStatement.ExpressionLabel statement) {}

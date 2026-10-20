@@ -36,6 +36,8 @@ public class UpdateIntegerConstantTypeVisitor extends AbstractJavaSyntaxVisitor 
     protected static final ObjectTypeReferenceExpression TYPE_INTEGER_REFERENCE = new ObjectTypeReferenceExpression(ObjectType.TYPE_INTEGER);
 
     protected Type returnedType;
+    // Type of the values of the switch expression being visited (Java 14+), null outside of a switch expression
+    protected Type yieldType;
 
     static {
         BaseType c  = TYPE_CHAR;
@@ -245,6 +247,32 @@ public class UpdateIntegerConstantTypeVisitor extends AbstractJavaSyntaxVisitor 
     }
 
     @Override
+    public void visit(SwitchExpression expression) {
+        updateSwitchExpression(expression.getType(), expression);
+    }
+
+    protected void updateSwitchExpression(Type type, SwitchExpression expression) {
+        Type t = yieldType;
+
+        if (type.isPrimitiveType() && expression.getType().isPrimitiveType()) {
+            expression.setType(type);
+        }
+
+        yieldType = type;
+        expression.getSwitchStatement().accept(this);
+        yieldType = t;
+    }
+
+    @Override
+    public void visit(YieldStatement statement) {
+        if (yieldType == null) {
+            statement.getExpression().accept(this);
+        } else {
+            statement.setExpression(updateExpression(yieldType, statement.getExpression()));
+        }
+    }
+
+    @Override
     public void visit(TernaryOperatorExpression expression) {
         Type trueType = expression.getTrueExpression().getType();
         Type falseType = expression.getFalseExpression().getType();
@@ -353,6 +381,11 @@ public class UpdateIntegerConstantTypeVisitor extends AbstractJavaSyntaxVisitor 
 
     protected Expression updateExpression(Type type, Expression expression) {
         assert type != TYPE_VOID : "UpdateIntegerConstantTypeVisitor.updateExpression(type, expr) : try to set 'void' to a numeric expression";
+
+        if (expression.isSwitchExpression()) {
+            updateSwitchExpression(type, (SwitchExpression)expression);
+            return expression;
+        }
 
         if ((type != expression.getType()) && expression.isIntegerConstantExpression()) {
             if (ObjectType.TYPE_STRING.equals(type)) {

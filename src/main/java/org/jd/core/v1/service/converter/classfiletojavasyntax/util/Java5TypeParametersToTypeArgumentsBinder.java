@@ -600,6 +600,7 @@ public class Java5TypeParametersToTypeArgumentsBinder extends AbstractTypeParame
         expression.getRightExpression().accept(this);
     }
 
+    @Override public void visit(SwitchExpression expression) {}
     @Override public void visit(ArrayExpression expression) {}
     @Override public void visit(BooleanExpression expression) {}
     @Override public void visit(CommentExpression expression) {}

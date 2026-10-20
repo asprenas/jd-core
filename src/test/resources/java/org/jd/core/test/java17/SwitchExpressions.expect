@@ -23,3 +23,6 @@
 # javac default branch of an exhaustive enum switch
 - IncompatibleClassChangeError
 - MatchException
+# statement switches stay statements
++ result = "start";
+~ switch \(day\)
