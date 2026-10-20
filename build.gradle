@@ -54,6 +54,82 @@ tasks.withType(JavaCompile).configureEach {
 tasks.named('test') {
     useJUnitPlatform()
     jvmArgs '-XX:-OmitStackTraceInFastThrow'
+    // JavaLanguageVersionTest is enabled by this variable: changing it must not leave the task UP-TO-DATE
+    inputs.property('JDCORE_SAMPLES', System.getenv('JDCORE_SAMPLES') ?: '')
+}
+
+// Java language samples: src/test/resources/java/org/jd/core/test/java<N>/ compiled by a Temurin JDK N
+// (Gradle toolchain, downloaded when missing) into src/test/resources/zip/data-java-language-<N>.zip.
+// Each lower version is also compiled by the newest JDK with --release N into
+// data-java-language-<N>-javac<newest>.zip (newer javac code generation for an older target).
+// The zips are committed; rebuild them with ./gradlew buildJavaLanguageSamples (or zipJavaLanguage<N>Samples,
+// zipJavaLanguage<N>Javac<newest>Samples).
+def javaLanguageVersions = [8, 11, 17, 21, 25]
+def javaLanguageNewest = javaLanguageVersions.max()
+def javaLanguageZipDir = file('src/test/resources/zip')
+
+def registerJavaLanguageSamples = { int version, int jdk ->
+    def suffix = (jdk == version) ? '' : "-javac${jdk}"
+    def taskSuffix = (jdk == version) ? "${version}" : "${version}Javac${jdk}"
+    def zipName = "data-java-language-${version}${suffix}"
+
+    def compileTask = tasks.register("compileJavaLanguage${taskSuffix}Samples", JavaCompile) {
+        group = 'java language samples'
+        description = "Compiles the Java ${version} language samples with a Temurin JDK ${jdk}."
+        javaCompiler = javaToolchains.compilerFor {
+            languageVersion = JavaLanguageVersion.of(jdk)
+            vendor = JvmVendorSpec.ADOPTIUM
+        }
+        source = fileTree("src/test/resources/java/org/jd/core/test/java${version}") { include '**/*.java' }
+        classpath = files()
+        destinationDirectory = layout.buildDirectory.dir("java-language-version-samples/${version}${suffix}")
+        // -g: line numbers and local variable names
+        options.debug = true
+        if (jdk == 8) {
+            // javac 8 has no --release
+            options.release.set((Integer) null)
+            sourceCompatibility = '1.8'
+            targetCompatibility = '1.8'
+        } else {
+            options.release = version
+        }
+    }
+
+    def compiler = compileTask.flatMap { it.javaCompiler }
+    def infoFile = new File(javaLanguageZipDir, "${zipName}.txt")
+
+    tasks.register("zipJavaLanguage${taskSuffix}Samples", Zip) {
+        group = 'java language samples'
+        description = "Packs the Java ${version} language samples compiled by JDK ${jdk} into ${zipName}.zip."
+        from compileTask
+        archiveFileName = "${zipName}.zip"
+        destinationDirectory = javaLanguageZipDir
+        preserveFileTimestamps = false
+        reproducibleFileOrder = true
+        outputs.file(infoFile)
+        doLast {
+            // Records which compiler produced the zip: javac output differs between JDK builds
+            def metadata = compiler.get().metadata
+            infoFile.text = "vendor=${metadata.vendor}\njavaRuntimeVersion=${metadata.javaRuntimeVersion}\nrelease=${version}\n"
+        }
+    }
+
+    return "zipJavaLanguage${taskSuffix}Samples"
+}
+
+def javaLanguageZipTasks = []
+
+javaLanguageVersions.each { version ->
+    javaLanguageZipTasks << registerJavaLanguageSamples(version, version)
+    if (version < javaLanguageNewest) {
+        javaLanguageZipTasks << registerJavaLanguageSamples(version, javaLanguageNewest)
+    }
+}
+
+tasks.register('buildJavaLanguageSamples') {
+    group = 'java language samples'
+    description = 'Rebuilds every data-java-language-<N>(-javac<newest>).zip with Temurin JDKs.'
+    dependsOn javaLanguageZipTasks
 }
 
 jar {
