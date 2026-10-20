@@ -387,6 +387,9 @@ public abstract class AbstractJavaSyntaxVisitor extends AbstractTypeArgumentVisi
         BaseType type = expression.getType();
 
         type.accept(this);
+        if (expression.getQualifier() != null) {
+            ((BaseType)expression.getQualifier()).accept(this);
+        }
     }
 
     @Override

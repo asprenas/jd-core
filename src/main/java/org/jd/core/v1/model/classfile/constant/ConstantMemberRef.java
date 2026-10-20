@@ -14,10 +14,28 @@ public class ConstantMemberRef extends Constant {
     protected int classIndex;
     protected int nameAndTypeIndex;
 
+    protected byte memberRefTag;
+
     public ConstantMemberRef(int classIndex, int nameAndTypeIndex) {
+        this(CONSTANT_MemberRef, classIndex, nameAndTypeIndex);
+    }
+
+    public ConstantMemberRef(byte memberRefTag, int classIndex, int nameAndTypeIndex) {
         super(CONSTANT_MemberRef);
+        this.memberRefTag = memberRefTag;
         this.classIndex = classIndex;
         this.nameAndTypeIndex = nameAndTypeIndex;
+    }
+
+    /**
+     * @return the original tag: CONSTANT_FieldRef, CONSTANT_MethodRef, CONSTANT_InterfaceMethodRef or CONSTANT_InvokeDynamic
+     */
+    public byte getMemberRefTag() {
+        return memberRefTag;
+    }
+
+    public boolean isInterfaceMethodRef() {
+        return memberRefTag == CONSTANT_InterfaceMethodRef;
     }
 
     public int getClassIndex() {

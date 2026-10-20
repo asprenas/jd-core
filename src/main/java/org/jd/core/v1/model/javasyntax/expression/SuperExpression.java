@@ -7,10 +7,12 @@
 
 package org.jd.core.v1.model.javasyntax.expression;
 
+import org.jd.core.v1.model.javasyntax.type.ObjectType;
 import org.jd.core.v1.model.javasyntax.type.Type;
 
 public class SuperExpression extends AbstractLineNumberExpression {
     protected Type type;
+    protected ObjectType qualifier; // 'A' in 'A.super.m()', null for plain 'super'
 
     public SuperExpression(Type type) {
         this.type = type;
@@ -19,6 +21,16 @@ public class SuperExpression extends AbstractLineNumberExpression {
     public SuperExpression(int lineNumber, Type type) {
         super(lineNumber);
         this.type = type;
+    }
+
+    public SuperExpression(int lineNumber, Type type, ObjectType qualifier) {
+        super(lineNumber);
+        this.type = type;
+        this.qualifier = qualifier;
+    }
+
+    public ObjectType getQualifier() {
+        return qualifier;
     }
 
     @Override
@@ -36,6 +48,6 @@ public class SuperExpression extends AbstractLineNumberExpression {
 
     @Override
     public String toString() {
-        return "SuperExpression{" + type + "}";
+        return "SuperExpression{" + type + (qualifier == null ? "" : ", qualifier=" + qualifier) + "}";
     }
 }
