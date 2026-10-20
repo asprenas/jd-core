@@ -19,3 +19,10 @@ inExpression MONDAY
 withTryCatch ""
 withTryCatch 42
 withTryCatch x
+charSwitch a
+charSwitch x
+longValue 1
+longValue 2
+longValue 7
+enumStatement MONDAY
+enumStatement SUNDAY

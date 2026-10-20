@@ -41,6 +41,7 @@ public interface ExpressionVisitor {
     void visit(StringConstantExpression expression);
     void visit(SuperConstructorInvocationExpression expression);
     void visit(SuperExpression expression);
+    void visit(SwitchExpression expression);
     void visit(TernaryOperatorExpression expression);
     void visit(ThisExpression expression);
     void visit(TypeReferenceDotClassExpression expression);

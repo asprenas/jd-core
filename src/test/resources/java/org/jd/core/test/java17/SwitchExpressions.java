@@ -97,4 +97,50 @@ public class SwitchExpressions {
         };
         System.out.println(text);
     }
+
+    // Phase 1 samples: other selector / value types, and statement switches that must stay statements
+
+    public int charSwitch(char c) {
+        return switch (c) {
+            case 'a', 'e', 'i', 'o', 'u' -> 1;
+            case ' ' -> 0;
+            default -> 2;
+        };
+    }
+
+    public long longValue(int k) {
+        return switch (k) {
+            case 1 -> 10L;
+            case 2 -> Long.MAX_VALUE;
+            default -> k;
+        };
+    }
+
+    public String enumStatement(Day day) {
+        String result = "?";
+        switch (day) {
+            case MONDAY:
+                result = "start";
+                break;
+            case FRIDAY:
+                result = "end";
+                break;
+            default:
+                break;
+        }
+        return result;
+    }
+
+    public int yieldFromLoop(int[] values, int k) {
+        return switch (k) {
+            case 0 -> {
+                int sum = 0;
+                for (int v : values) {
+                    sum += v;
+                }
+                yield sum;
+            }
+            default -> -1;
+        };
+    }
 }

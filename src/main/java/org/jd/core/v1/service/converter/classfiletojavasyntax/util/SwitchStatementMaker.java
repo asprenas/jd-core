@@ -7,6 +7,9 @@
 
 package org.jd.core.v1.service.converter.classfiletojavasyntax.util;
 
+import org.jd.core.v1.model.classfile.ClassFile;
+import org.jd.core.v1.model.classfile.Constants;
+import org.jd.core.v1.model.classfile.Field;
 import org.jd.core.v1.model.javasyntax.expression.*;
 import org.jd.core.v1.model.javasyntax.statement.*;
 import org.jd.core.v1.model.javasyntax.type.ObjectType;
@@ -19,6 +22,7 @@ import org.jd.core.v1.util.DefaultList;
 
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Map;
 
 public class SwitchStatementMaker {
     protected static final Integer MINUS_ONE = Integer.valueOf(-1);
@@ -252,7 +256,74 @@ public class SwitchStatementMaker {
 
         // Replace synthetic index by enum name
         Expression expression = switchStatement.getCondition().getIndex().getExpression();
+
+        replaceLabels(switchStatement, (ObjectType)expression.getType(), map);
+
+        // Replace synthetic key
+        switchStatement.setCondition(expression);
+    }
+
+    /**
+     * Javac 21+ switch on an enum of the same compilation unit: 'switch (e.ordinal())', no $SwitchMap.
+     * The ordinal of a constant is its position among the enum fields of the enum class.
+     */
+    public static void makeSwitchEnumOrdinal(ClassFileBodyDeclaration bodyDeclaration, SwitchStatement switchStatement) {
+        Expression condition = switchStatement.getCondition();
+
+        if (!condition.isMethodInvocationExpression() || !"ordinal".equals(condition.getName()) || !"()I".equals(condition.getDescriptor())) {
+            return;
+        }
+
+        Expression expression = condition.getExpression();
+
+        if (!expression.getType().isObjectType()) {
+            return;
+        }
+
         ObjectType type = (ObjectType)expression.getType();
+        ClassFileTypeDeclaration enumDeclaration = bodyDeclaration.getInnerTypeDeclaration(type.getInternalName());
+
+        if (enumDeclaration == null) {
+            return;
+        }
+
+        ClassFile enumClassFile = ((ClassFileBodyDeclaration)enumDeclaration.getBodyDeclaration()).getClassFile();
+
+        if ((enumClassFile.getAccessFlags() & Constants.ACC_ENUM) == 0) {
+            return;
+        }
+
+        HashMap<Integer, String> map = new HashMap<>();
+        int ordinal = 0;
+
+        for (Field field : enumClassFile.getFields()) {
+            if ((field.getAccessFlags() & Constants.ACC_ENUM) != 0) {
+                map.put(ordinal++, field.getName());
+            }
+        }
+
+        if (replaceLabels(switchStatement, type, map)) {
+            switchStatement.setCondition(expression);
+        }
+    }
+
+    /** Replaces the integer labels by enum constants, unless an integer has no constant. */
+    protected static boolean replaceLabels(SwitchStatement switchStatement, ObjectType type, Map<Integer, String> map) {
+        for (SwitchStatement.Block block : switchStatement.getBlocks()) {
+            if (block.isSwitchStatementLabelBlock()) {
+                SwitchStatement.Label label = ((SwitchStatement.LabelBlock) block).getLabel();
+
+                if ((label != SwitchStatement.DEFAULT_LABEL) && !map.containsKey(label.getExpression().getIntegerValue())) {
+                    return false;
+                }
+            } else if (block.isSwitchStatementMultiLabelsBlock()) {
+                for (SwitchStatement.Label label : ((SwitchStatement.MultiLabelsBlock) block).getLabels()) {
+                    if ((label != SwitchStatement.DEFAULT_LABEL) && !map.containsKey(label.getExpression().getIntegerValue())) {
+                        return false;
+                    }
+                }
+            }
+        }
 
         for (SwitchStatement.Block block : switchStatement.getBlocks()) {
             if (block.isSwitchStatementLabelBlock()) {
@@ -276,7 +347,35 @@ public class SwitchStatementMaker {
             }
         }
 
-        // Replace synthetic key
-        switchStatement.setCondition(expression);
+        return true;
+    }
+
+    /**
+     * javac adds a 'default' block throwing IncompatibleClassChangeError (JDK < 21) or MatchException (JDK 21+)
+     * to an exhaustive switch expression on an enum or a sealed type. It is not part of the source.
+     */
+    public static void removeExhaustiveDefaultBlock(SwitchStatement switchStatement) {
+        Iterator<SwitchStatement.Block> iterator = switchStatement.getBlocks().iterator();
+
+        while (iterator.hasNext()) {
+            SwitchStatement.Block block = iterator.next();
+
+            if (block.isSwitchStatementLabelBlock() && (((SwitchStatement.LabelBlock)block).getLabel() == SwitchStatement.DEFAULT_LABEL)) {
+                BaseStatement statements = block.getStatements();
+
+                if (statements.isList() && (statements.size() == 1)) {
+                    statements = statements.getFirst();
+                }
+
+                if (statements.isThrowStatement() && statements.getExpression().isNewExpression()) {
+                    String internalName = ((NewExpression)statements.getExpression()).getObjectType().getInternalName();
+
+                    if ("java/lang/IncompatibleClassChangeError".equals(internalName) || "java/lang/MatchException".equals(internalName)) {
+                        iterator.remove();
+                    }
+                }
+                return;
+            }
+        }
     }
 }
