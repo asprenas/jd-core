@@ -17,10 +17,14 @@ import org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.d
 import org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.declaration.ClassFileConstructorOrMethodDeclaration;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.declaration.ClassFileTypeDeclaration;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.expression.ClassFileLocalVariableReferenceExpression;
+import org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.expression.ClassFileSwitchIndexExpression;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.model.localvariable.AbstractLocalVariable;
 import org.jd.core.v1.util.DefaultList;
 
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Iterator;
 import java.util.Map;
 
@@ -351,10 +355,256 @@ public class SwitchStatementMaker {
     }
 
     /**
+     * Java 21+ pattern matching 'switch' without guard: the index computed for SwitchBootstraps.typeSwitch /
+     * enumSwitch is replaced by the selector and the integer labels by the source labels:
+     * 'case Integer i:' (the cast assignment starting the block becomes the binding), 'case null:',
+     * 'case "a":', 'case 1:', 'case Coin.HEADS:'. Returns false (nothing changed) when the switch is not
+     * understood, e.g. with guards: javac restarts the switch with another index.
+     */
+    public static boolean makePatternSwitch(Statements statements, SwitchStatement switchStatement, int majorVersion, boolean switchIsLastStatement) {
+        ClassFileSwitchIndexExpression index = (ClassFileSwitchIndexExpression)switchStatement.getCondition();
+        Expression selector = index.getSelector();
+        Expression restart = index.getRestart();
+        List<ClassFileSwitchIndexExpression.Label> labels = index.getLabels();
+
+        if (restart.isLocalVariableReferenceExpression() && assignsLocalVariable(switchStatement, restart)) {
+            // Guard: 'restart = n; continue;'
+            return false;
+        }
+
+        // Check every label can be written before changing anything
+        HashSet<Integer> usedIndexes = new HashSet<>();
+
+        for (SwitchStatement.Block block : switchStatement.getBlocks()) {
+            List<SwitchStatement.Label> blockLabels = getLabels(block);
+
+            for (SwitchStatement.Label label : blockLabels) {
+                if (label != SwitchStatement.DEFAULT_LABEL) {
+                    int i = label.getExpression().getIntegerValue();
+
+                    if ((i < -1) || (i >= labels.size())) {
+                        return false;
+                    }
+                    if ((i >= 0) && labels.get(i).isTypePattern() && ((blockLabels.size() != 1) || (getBinding(block, selector) == null)) && (majorVersion < 66)) {
+                        // No binding variable and no '_' before Java 22
+                        return false;
+                    }
+                    usedIndexes.add(i);
+                }
+            }
+        }
+
+        // Rewrite the labels
+        for (SwitchStatement.Block block : switchStatement.getBlocks()) {
+            List<SwitchStatement.Label> blockLabels = getLabels(block);
+
+            for (SwitchStatement.Label label : blockLabels) {
+                if (label == SwitchStatement.DEFAULT_LABEL) {
+                    continue;
+                }
+
+                SwitchStatement.ExpressionLabel expressionLabel = (SwitchStatement.ExpressionLabel)label;
+                Expression value = expressionLabel.getExpression();
+                int i = value.getIntegerValue();
+                int lineNumber = value.getLineNumber();
+
+                if (i == -1) {
+                    expressionLabel.setExpression(new NullExpression(lineNumber, ObjectType.TYPE_OBJECT));
+                } else {
+                    ClassFileSwitchIndexExpression.Label l = labels.get(i);
+
+                    if (l.isTypePattern()) {
+                        Expression binding = (blockLabels.size() == 1) ? removeBinding(block, selector) : null;
+                        expressionLabel.setExpression(new TypePatternExpression(lineNumber, l.getType(), binding));
+                    } else {
+                        expressionLabel.setExpression(simplifyEnumConstant(l.getValue(), selector));
+                    }
+                }
+            }
+        }
+
+        // A last type pattern sharing the 'default' block (javac uses the same target): 'case String t' replaces
+        // 'default' when its binding starts the block
+        for (int i = 0; i < labels.size(); i++) {
+            if (!usedIndexes.contains(i) && labels.get(i).isTypePattern()) {
+                List<SwitchStatement.Block> blocks = switchStatement.getBlocks();
+
+                for (int j = 0; j < blocks.size(); j++) {
+                    SwitchStatement.Block block = blocks.get(j);
+
+                    if (block.isSwitchStatementLabelBlock() && (((SwitchStatement.LabelBlock)block).getLabel() == SwitchStatement.DEFAULT_LABEL)) {
+                        Expression binding = removeBinding(block, selector);
+
+                        if (binding != null) {
+                            SwitchStatement.Label label = new SwitchStatement.ExpressionLabel(new TypePatternExpression(binding.getLineNumber(), labels.get(i).getType(), binding));
+                            blocks.set(j, new SwitchStatement.LabelBlock(label, block.getStatements()));
+                        }
+                    }
+                }
+                break;
+            }
+        }
+
+        boolean exhaustiveDefaultRemoved = removeExhaustiveDefaultBlock(switchStatement);
+        switchStatement.setCondition(selector);
+
+        // Remove 'Objects.requireNonNull(selector)' and 'restart = 0' written before the switch by javac
+        int last = statements.size() - (switchIsLastStatement ? 2 : 1);
+        boolean nullThrows = false;
+
+        if (restart.isLocalVariableReferenceExpression()) {
+            // No more used
+            ((ClassFileLocalVariableReferenceExpression)restart).getLocalVariable().setDeclared(true);
+        }
+
+        for (int i = last; (i >= 0) && (i >= last - 2); i--) {
+            Expression expression = statements.get(i).getExpression();
+
+            if (isRequireNonNull(expression)) {
+                nullThrows = true;
+                statements.remove(i);
+            } else if (restart.isLocalVariableReferenceExpression() && isAssignment(expression, restart)) {
+                statements.remove(i);
+            }
+        }
+
+        List<SwitchStatement.Block> blocks = switchStatement.getBlocks();
+        int defaultIndex = -1;
+
+        for (int i = 0; i < blocks.size(); i++) {
+            if (getLabels(blocks.get(i)).contains(SwitchStatement.DEFAULT_LABEL)) {
+                defaultIndex = i;
+            }
+        }
+
+        if (!nullThrows && !usedIndexes.contains(-1)) {
+            // No null check and no 'case null': javac sends null (index -1) to the 'default' target
+            SwitchStatement.Label nullLabel = new SwitchStatement.ExpressionLabel(new NullExpression(selector.getLineNumber(), ObjectType.TYPE_OBJECT));
+
+            if (defaultIndex != -1) {
+                SwitchStatement.Block block = blocks.get(defaultIndex);
+                DefaultList<SwitchStatement.Label> labelList = new DefaultList<>();
+                labelList.add(nullLabel);
+                labelList.addAll(getLabels(block));
+                blocks.set(defaultIndex, new SwitchStatement.MultiLabelsBlock(labelList, block.getStatements()));
+            } else if (switchIsLastStatement) {
+                DefaultList<SwitchStatement.Label> labelList = new DefaultList<>();
+                labelList.add(nullLabel);
+                labelList.add(SwitchStatement.DEFAULT_LABEL);
+                Statements breakStatements = new Statements();
+                breakStatements.add(BreakStatement.BREAK);
+                blocks.add(new SwitchStatement.MultiLabelsBlock(labelList, breakStatements));
+            }
+        } else if ((defaultIndex == -1) && switchIsLastStatement && !exhaustiveDefaultRemoved && !hasUnconditionalPattern(switchStatement, selector)) {
+            // The 'default' target is the end of the switch: a pattern 'switch' statement must be exhaustive
+            Statements breakStatements = new Statements();
+            breakStatements.add(BreakStatement.BREAK);
+            blocks.add(new SwitchStatement.LabelBlock(SwitchStatement.DEFAULT_LABEL, breakStatements));
+        }
+
+        return true;
+    }
+
+    protected static boolean hasUnconditionalPattern(SwitchStatement switchStatement, Expression selector) {
+        for (SwitchStatement.Block block : switchStatement.getBlocks()) {
+            for (SwitchStatement.Label label : getLabels(block)) {
+                if ((label != SwitchStatement.DEFAULT_LABEL) && label.getExpression().isTypePatternExpression() &&
+                    label.getExpression().getType().equals(selector.getType())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    protected static List<SwitchStatement.Label> getLabels(SwitchStatement.Block block) {
+        if (block.isSwitchStatementLabelBlock()) {
+            return Collections.singletonList(((SwitchStatement.LabelBlock)block).getLabel());
+        }
+        return ((SwitchStatement.MultiLabelsBlock)block).getLabels();
+    }
+
+    /** First statement 'x = (T)selector;' or 'x = selector;' of the block: returns the variable x */
+    protected static Expression getBinding(SwitchStatement.Block block, Expression selector) {
+        BaseStatement statements = block.getStatements();
+
+        if ((statements == null) || (statements.size() == 0)) {
+            return null;
+        }
+
+        Expression expression = statements.getFirst().getExpression();
+
+        if (!expression.isBinaryOperatorExpression() || !"=".equals(expression.getOperator()) || !expression.getLeftExpression().isLocalVariableReferenceExpression()) {
+            return null;
+        }
+
+        Expression right = expression.getRightExpression();
+
+        if (right.isCastExpression()) {
+            right = right.getExpression();
+        }
+
+        return isSameLocalVariable(right, selector) ? expression.getLeftExpression() : null;
+    }
+
+    protected static Expression removeBinding(SwitchStatement.Block block, Expression selector) {
+        Expression binding = getBinding(block, selector);
+
+        if (binding != null) {
+            BaseStatement statements = block.getStatements();
+
+            if (statements.isList()) {
+                statements.getList().remove(0);
+            }
+            // Declared by the pattern
+            ((ClassFileLocalVariableReferenceExpression)binding).getLocalVariable().setDeclared(true);
+        }
+
+        return binding;
+    }
+
+    /** 'case Coin.HEADS' becomes 'case HEADS' when the selector is a Coin */
+    protected static Expression simplifyEnumConstant(Expression value, Expression selector) {
+        if (value.isFieldReferenceExpression() && value.getExpression().isObjectTypeReferenceExpression() && value.getType().equals(selector.getType())) {
+            return new EnumConstantReferenceExpression(value.getLineNumber(), (ObjectType)value.getType(), value.getName());
+        }
+        return value;
+    }
+
+    protected static boolean isSameLocalVariable(Expression e1, Expression e2) {
+        return e1.isLocalVariableReferenceExpression() && e2.isLocalVariableReferenceExpression() &&
+               (((ClassFileLocalVariableReferenceExpression)e1).getLocalVariable().getIndex() == ((ClassFileLocalVariableReferenceExpression)e2).getLocalVariable().getIndex());
+    }
+
+    protected static boolean isRequireNonNull(Expression expression) {
+        return expression.isMethodInvocationExpression() && "requireNonNull".equals(expression.getName()) && "java/util/Objects".equals(expression.getInternalTypeName());
+    }
+
+    protected static boolean isAssignment(Expression expression, Expression variable) {
+        return expression.isBinaryOperatorExpression() && "=".equals(expression.getOperator()) && isSameLocalVariable(expression.getLeftExpression(), variable);
+    }
+
+    protected static boolean assignsLocalVariable(SwitchStatement switchStatement, final Expression variable) {
+        final boolean[] found = { false };
+
+        switchStatement.accept(new org.jd.core.v1.model.javasyntax.AbstractJavaSyntaxVisitor() {
+            @Override
+            public void visit(BinaryOperatorExpression expression) {
+                if (isAssignment(expression, variable)) {
+                    found[0] = true;
+                }
+                super.visit(expression);
+            }
+        });
+
+        return found[0];
+    }
+
+    /**
      * javac adds a 'default' block throwing IncompatibleClassChangeError (JDK < 21) or MatchException (JDK 21+)
      * to an exhaustive switch expression on an enum or a sealed type. It is not part of the source.
      */
-    public static void removeExhaustiveDefaultBlock(SwitchStatement switchStatement) {
+    public static boolean removeExhaustiveDefaultBlock(SwitchStatement switchStatement) {
         Iterator<SwitchStatement.Block> iterator = switchStatement.getBlocks().iterator();
 
         while (iterator.hasNext()) {
@@ -372,10 +622,13 @@ public class SwitchStatementMaker {
 
                     if ("java/lang/IncompatibleClassChangeError".equals(internalName) || "java/lang/MatchException".equals(internalName)) {
                         iterator.remove();
+                        return true;
                     }
                 }
-                return;
+                return false;
             }
         }
+
+        return false;
     }
 }

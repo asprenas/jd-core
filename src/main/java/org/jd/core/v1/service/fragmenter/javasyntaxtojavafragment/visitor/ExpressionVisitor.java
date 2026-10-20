@@ -341,6 +341,20 @@ public class ExpressionVisitor extends TypeVisitor {
     }
 
     @Override
+    public void visit(TypePatternExpression expression) {
+        // 'Type name'
+        BaseType type = expression.getType();
+        type.accept(this);
+        tokens.add(TextToken.SPACE);
+
+        if (expression.getVariable() == null) {
+            tokens.add(newTextToken("_"));
+        } else {
+            expression.getVariable().accept(this);
+        }
+    }
+
+    @Override
     public void visit(LengthExpression expression) {
         visit(expression, expression.getExpression());
         tokens.add(TextToken.DOT);
@@ -754,6 +768,7 @@ public class ExpressionVisitor extends TypeVisitor {
         @Override public void visit(SuperConstructorInvocationExpression expression) { ExpressionVisitor.this.visit(expression); }
         @Override public void visit(SuperExpression expression) { ExpressionVisitor.this.visit(expression); }
         @Override public void visit(SwitchExpression expression) { ExpressionVisitor.this.visit(expression); }
+        @Override public void visit(TypePatternExpression expression) { ExpressionVisitor.this.visit(expression); }
         @Override public void visit(TernaryOperatorExpression expression) { ExpressionVisitor.this.visit(expression); }
         @Override public void visit(ThisExpression expression) { ExpressionVisitor.this.visit(expression); }
         @Override public void visit(TypeReferenceDotClassExpression expression) { ExpressionVisitor.this.visit(expression); }

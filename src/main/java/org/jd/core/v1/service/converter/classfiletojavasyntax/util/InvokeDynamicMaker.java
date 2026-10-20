@@ -17,6 +17,10 @@ import org.jd.core.v1.model.javasyntax.type.PrimitiveType;
 import org.jd.core.v1.model.javasyntax.type.Type;
 import org.jd.core.v1.model.javasyntax.type.Types;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.expression.ClassFileMethodInvocationExpression;
+import org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.expression.ClassFileSwitchIndexExpression;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.jd.core.v1.model.javasyntax.type.ObjectType.TYPE_OBJECT;
 import static org.jd.core.v1.model.javasyntax.type.ObjectType.TYPE_STRING;
@@ -215,6 +219,11 @@ public class InvokeDynamicMaker {
 
         int[] arguments = bootstrapMethod.getBootstrapArguments();
         Expression result = new IntegerConstantExpression(lineNumber, TYPE_INT, arguments.length);
+        List<ClassFileSwitchIndexExpression.Label> labels = new ArrayList<>(arguments.length);
+
+        for (int argument : arguments) {
+            labels.add(makeLabel(lineNumber, argument, enumType));
+        }
 
         for (int i = arguments.length - 1; i >= 0; i--) {
             Expression match = makeLabelMatch(lineNumber, selector, arguments[i], enumType);
@@ -224,7 +233,34 @@ public class InvokeDynamicMaker {
         }
 
         Expression isNull = new BinaryOperatorExpression(lineNumber, TYPE_BOOLEAN, selector, "==", new NullExpression(lineNumber, TYPE_OBJECT), 8);
-        return new TernaryOperatorExpression(lineNumber, TYPE_INT, isNull, new IntegerConstantExpression(lineNumber, TYPE_INT, -1), result);
+        TernaryOperatorExpression index = new TernaryOperatorExpression(lineNumber, TYPE_INT, isNull, new IntegerConstantExpression(lineNumber, TYPE_INT, -1), result);
+        return new ClassFileSwitchIndexExpression(index, selector, restart, labels);
+    }
+
+    /** The source form of a label: a type pattern, or a constant ('case "a"', 'case 1', 'case Coin.HEADS') */
+    protected ClassFileSwitchIndexExpression.Label makeLabel(int lineNumber, int labelIndex, ObjectType enumType) {
+        Constant label = constants.getConstant(labelIndex);
+
+        if (label instanceof ConstantClass) {
+            return new ClassFileSwitchIndexExpression.Label(typeMaker.makeFromDescriptorOrInternalTypeName(constants.getConstantTypeName(labelIndex)), null);
+        }
+        if (label instanceof ConstantString) {
+            String value = constants.getConstantString(labelIndex);
+            if (enumType != null) {
+                return new ClassFileSwitchIndexExpression.Label(enumType, enumConstant(lineNumber, enumType, value));
+            }
+            return new ClassFileSwitchIndexExpression.Label(TYPE_STRING, new StringConstantExpression(lineNumber, value));
+        }
+        if (label instanceof ConstantInteger) {
+            return new ClassFileSwitchIndexExpression.Label(null, new IntegerConstantExpression(lineNumber, TYPE_INT, ((ConstantInteger)label).getValue()));
+        }
+        if (label instanceof ConstantDynamic) {
+            String[] enumConstant = resolveEnumDesc((ConstantDynamic)label);
+            ObjectType type = typeMaker.makeFromInternalTypeName(enumConstant[0]);
+            return new ClassFileSwitchIndexExpression.Label(type, enumConstant(lineNumber, type, enumConstant[1]));
+        }
+
+        throw new IllegalStateException("SwitchBootstraps : unexpected label " + label);
     }
 
     protected Expression makeLabelMatch(int lineNumber, Expression selector, int labelIndex, ObjectType enumType) {

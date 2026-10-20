@@ -1,5 +1,9 @@
-# Phase 2: no SwitchBootstraps call left in the output (Phase 3 restores the pattern syntax)
+# Phase 3: pattern labels restored (no SwitchBootstraps call, no index expression left)
 - typeSwitch
 - enumSwitch
-+ instanceof Integer
-+ Coin.HEADS
+- instanceof
++ case Integer i:
++ case null:
++ case "bb":
++ case Coin.HEADS:
++ case Coin x:
