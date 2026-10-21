@@ -31,3 +31,6 @@
 + case 2, 3 -> System.out.println("few");
 + default -> throw new IllegalArgumentException(s);
 - break;
+~ String upper = s\.toUpperCase\(\);
+~ int r = k \* 2;
+- String upper;
