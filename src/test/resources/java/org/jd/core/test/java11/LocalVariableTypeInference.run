@@ -1,0 +1,9 @@
+# var: same values, anonymous class type
+simple
+generics
+loops array:1|2
+tryResource does-not-exist
+anonymousType
+intersectionType true
+intersectionType false
+arrayAndCast

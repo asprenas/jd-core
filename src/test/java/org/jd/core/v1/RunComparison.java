@@ -7,6 +7,7 @@ import java.io.File;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Executable;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -15,6 +16,7 @@ import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Supplier;
 
 /**
  * Calls the same methods on the original class (from the sample zip) and on the recompiled decompiled
@@ -23,13 +25,22 @@ import java.util.List;
  *
  * Calls come from an optional resource java&lt;N&gt;/&lt;Sample&gt;.run, one call per line, '#' starts a comment:
  *
- *   methodName arg1 arg2 ...
+ *   methodName arg1 arg2 ...        method of the sample class
+ *   Nested.methodName arg1 ...      method of a nested class of the sample ('A.B.m' for deeper classes)
+ *   new Nested arg1 ...             constructor of a nested class, the result is the new instance
  *
- * Arguments are separated by blanks and converted to the parameter types of the only method with that
- * name and argument count: primitives and their wrappers, String ("null" is null, "\"\"" is the empty
- * string), enum constant names. For an Object parameter, "int:5" is an Integer. Instance methods are called on
- * a new instance (no-argument constructor).
- * Results are compared with String.valueOf, thrown exceptions by class name.
+ * Arguments are separated by blanks and converted to the parameter types of the only method (or constructor)
+ * with that name and argument count:
+ * <ul>
+ *   <li>primitives and their wrappers, String ("null" is null, "\"\"" is the empty string), enum constant names</li>
+ *   <li>for an Object (or Number, ...) parameter: "int:5", "long:5", "double:1.5" are boxed values</li>
+ *   <li>"list:a|b|int:3": an ArrayList, each element converted like an Object argument ("list:" is empty)</li>
+ *   <li>"Point(1,2)": a new instance of the nested class Point of the sample, arguments converted recursively
+ *       (no blank inside). "Line(Point(0,0),Point(1,1))" nests</li>
+ * </ul>
+ * Instance methods are called on a new instance (no-argument constructor).
+ * Results are compared with String.valueOf, thrown exceptions by class name. A returned Supplier is called and
+ * its result compared ('supplied ...', recursively), a returned Runnable is run.
  */
 public final class RunComparison {
     private static final File RECOMPILED_DIRECTORY = new File("build/test-recompiled");
@@ -54,7 +65,14 @@ public final class RunComparison {
                 String expected = invoke(original, call);
                 String actual = invoke(recompiled, call);
 
-                if (!expected.equals(actual)) {
+                if (System.getenv("JDCORE_RUN_VERBOSE") != null) {
+                    System.out.println("run " + internalName + ": " + call + " -> " + expected);
+                }
+
+                if (expected.startsWith("error:")) {
+                    // A wrong .run line, not a decompiler difference
+                    differences.add(call + "  invalid call: " + expected);
+                } else if (!expected.equals(actual)) {
                     differences.add(call + "  original: " + expected + "  decompiled: " + actual);
                 }
             }
@@ -83,33 +101,44 @@ public final class RunComparison {
         return calls;
     }
 
-    private static String invoke(Class<?> type, String call) {
-        String[] parts = call.split("\\s+");
-        String name = parts[0];
-        int argumentCount = parts.length - 1;
-        Method method = null;
+    /** The text printed on System.out by the call is a part of the result */
+    private static String invoke(Class<?> sample, String call) {
+        java.io.PrintStream out = System.out;
+        java.io.ByteArrayOutputStream printed = new java.io.ByteArrayOutputStream();
 
-        for (Method m : type.getDeclaredMethods()) {
-            if (m.getName().equals(name) && (m.getParameterTypes().length == argumentCount)) {
-                if (method != null) {
-                    return "error: ambiguous method " + name + "/" + argumentCount;
-                }
-                method = m;
-            }
-        }
-
-        if (method == null) {
-            return "error: no method " + name + "/" + argumentCount;
-        }
+        System.setOut(new java.io.PrintStream(printed, true));
 
         try {
-            Class<?>[] parameterTypes = method.getParameterTypes();
-            Object[] arguments = new Object[argumentCount];
+            String result = invokeCall(sample, call);
+            return (printed.size() == 0) ? result : result + ", printed " + printed.toString().replace("\r", "").replace("\n", "\\n");
+        } finally {
+            System.setOut(out);
+        }
+    }
 
-            for (int i = 0; i < argumentCount; i++) {
-                arguments[i] = convert(parameterTypes[i], parts[i + 1]);
+    private static String invokeCall(Class<?> sample, String call) {
+        String[] parts = call.split("\\s+");
+
+        try {
+            if (parts[0].equals("new")) {
+                Class<?> type = findNestedClass(sample, parts[1]);
+                String[] values = copyOfRange(parts, 2);
+                Constructor<?> constructor = (Constructor<?>)find(type.getDeclaredConstructors(), null, values.length);
+                return "returned " + describe(newInstance(sample, constructor, values), 0);
             }
 
+            Class<?> type = sample;
+            String name = parts[0];
+            int index = name.lastIndexOf('.');
+
+            if (index != -1) {
+                type = findNestedClass(sample, name.substring(0, index));
+                name = name.substring(index + 1);
+            }
+
+            String[] values = copyOfRange(parts, 1);
+            Method method = (Method)find(type.getDeclaredMethods(), name, values.length);
+            Object[] arguments = convertArguments(sample, method.getParameterTypes(), values);
             Object target = null;
 
             if (!Modifier.isStatic(method.getModifiers())) {
@@ -119,7 +148,7 @@ public final class RunComparison {
             }
 
             method.setAccessible(true);
-            return "returned " + String.valueOf(method.invoke(target, arguments));
+            return "returned " + describe(method.invoke(target, arguments), 0);
         } catch (InvocationTargetException e) {
             return "threw " + e.getCause().getClass().getName();
         } catch (Exception e) {
@@ -127,8 +156,100 @@ public final class RunComparison {
         }
     }
 
+    /** @param name null for a constructor */
+    private static Executable find(Executable[] executables, String name, int argumentCount) {
+        Executable found = null;
+
+        for (Executable e : executables) {
+            if (((name == null) || e.getName().equals(name)) && (e.getParameterCount() == argumentCount) && !e.isSynthetic()) {
+                if (found != null) {
+                    throw new IllegalArgumentException("ambiguous " + name + "/" + argumentCount);
+                }
+                found = e;
+            }
+        }
+
+        if (found == null) {
+            throw new IllegalArgumentException("no " + name + "/" + argumentCount);
+        }
+        return found;
+    }
+
+    /** @param path 'Point' or 'Outer.Inner': nested classes of the sample */
+    private static Class<?> findNestedClass(Class<?> sample, String path) throws ClassNotFoundException {
+        return Class.forName(sample.getName() + "$" + path.replace('.', '$'), true, sample.getClassLoader());
+    }
+
+    private static Object newInstance(Class<?> sample, Constructor<?> constructor, String[] values) throws Exception {
+        constructor.setAccessible(true);
+        return constructor.newInstance(convertArguments(sample, constructor.getParameterTypes(), values));
+    }
+
+    private static Object[] convertArguments(Class<?> sample, Class<?>[] types, String[] values) throws Exception {
+        Object[] arguments = new Object[values.length];
+
+        for (int i = 0; i < values.length; i++) {
+            arguments[i] = convert(sample, types[i], values[i]);
+        }
+
+        return arguments;
+    }
+
+    /** Results of lambdas are compared by behavior: their 'toString' contains generated class names */
+    private static String describe(Object result, int depth) {
+        if ((depth < 3) && (result instanceof Supplier)) {
+            return "supplied " + describe(((Supplier<?>)result).get(), depth + 1);
+        }
+        if ((depth < 3) && (result instanceof Runnable) && !(result instanceof Thread)) {
+            ((Runnable)result).run();
+            return "ran";
+        }
+        if ((result != null) && (depth < 3) && isSampleClassWithoutToString(result.getClass())) {
+            return describeFields(result, depth);
+        }
+        return String.valueOf(result);
+    }
+
+    /** A class of the sample (not of the JDK) that inherits 'Object.toString': its string contains a hash code */
+    private static boolean isSampleClassWithoutToString(Class<?> type) {
+        if ((type.getClassLoader() == null) || type.isSynthetic() || type.getName().contains("$$Lambda")) {
+            return false;
+        }
+        try {
+            return type.getMethod("toString").getDeclaringClass() == Object.class;
+        } catch (NoSuchMethodException e) {
+            return false;
+        }
+    }
+
+    /** 'Name{field=value, ...}' with the instance fields of the class and of its super classes */
+    private static String describeFields(Object object, int depth) {
+        StringBuilder sb = new StringBuilder(object.getClass().getSimpleName()).append('{');
+        String separator = "";
+
+        try {
+            for (Class<?> c = object.getClass(); (c != null) && (c != Object.class); c = c.getSuperclass()) {
+                java.lang.reflect.Field[] fields = c.getDeclaredFields();
+                // The decompiled class may declare the fields in another order
+                java.util.Arrays.sort(fields, java.util.Comparator.comparing(java.lang.reflect.Field::getName));
+
+                for (java.lang.reflect.Field field : fields) {
+                    if (!Modifier.isStatic(field.getModifiers()) && !field.isSynthetic()) {
+                        field.setAccessible(true);
+                        sb.append(separator).append(field.getName()).append('=').append(describe(field.get(object), depth + 1));
+                        separator = ", ";
+                    }
+                }
+            }
+        } catch (IllegalAccessException e) {
+            sb.append(e);
+        }
+
+        return sb.append('}').toString();
+    }
+
     @SuppressWarnings({"unchecked", "rawtypes"})
-    private static Object convert(Class<?> type, String value) {
+    private static Object convert(Class<?> sample, Class<?> type, String value) throws Exception {
         if (value.equals("null") && !type.isPrimitive()) {
             return null;
         }
@@ -150,16 +271,98 @@ public final class RunComparison {
         if ((type == char.class) || (type == Character.class)) {
             return Character.valueOf(value.charAt(0));
         }
+        if ((type == byte.class) || (type == Byte.class)) {
+            return Byte.valueOf(value);
+        }
         if (type.isEnum()) {
             return Enum.valueOf((Class<Enum>)type, value);
         }
-        if (value.startsWith("int:") && !type.isPrimitive() && type.isAssignableFrom(Integer.class)) {
+        if (value.startsWith("int:")) {
             return Integer.valueOf(value.substring(4));
+        }
+        if (value.startsWith("long:")) {
+            return Long.valueOf(value.substring(5));
+        }
+        if (value.startsWith("double:")) {
+            return Double.valueOf(value.substring(7));
+        }
+        if (type.isArray() && value.startsWith("array:")) {
+            String[] elements = (value.length() > 6) ? value.substring(6).split("\\|", -1) : new String[0];
+            Object array = java.lang.reflect.Array.newInstance(type.getComponentType(), elements.length);
+
+            for (int i = 0; i < elements.length; i++) {
+                java.lang.reflect.Array.set(array, i, convert(sample, type.getComponentType(), elements[i]));
+            }
+            return array;
+        }
+        if (value.startsWith("list:")) {
+            List<Object> list = new ArrayList<>();
+            if (value.length() > 5) {
+                for (String element : value.substring(5).split("\\|")) {
+                    list.add(convert(sample, Object.class, element));
+                }
+            }
+            return list;
+        }
+        int open = value.indexOf('(');
+        if ((open > 0) && value.endsWith(")") && Character.isUpperCase(value.charAt(0))) {
+            // 'Point(1,2)': a nested class of the sample
+            Class<?> nested = findNestedClass(sample, value.substring(0, open));
+            String[] values = splitArguments(value.substring(open + 1, value.length() - 1));
+            Constructor<?> constructor = (Constructor<?>)find(nested.getDeclaredConstructors(), null, values.length);
+            return newInstance(sample, constructor, values);
+        }
+        if (value.matches("[A-Z]\\w*(\\.[A-Z]\\w*)*\\.[A-Z][A-Z0-9_]*")) {
+            // 'Color.RED': a constant of a nested enum of the sample
+            int dot = value.lastIndexOf('.');
+
+            try {
+                Class<?> nested = findNestedClass(sample, value.substring(0, dot));
+
+                if (nested.isEnum()) {
+                    return Enum.valueOf((Class<Enum>)nested, value.substring(dot + 1));
+                }
+            } catch (ClassNotFoundException e) {
+                // A string
+            }
         }
         if (value.equals("\"\"")) {
             return "";
         }
         return value;
+    }
+
+    /** "1,Point(2,3),x" -> {"1", "Point(2,3)", "x"} */
+    private static String[] splitArguments(String text) {
+        List<String> values = new ArrayList<>();
+        int depth = 0;
+        int start = 0;
+
+        if (text.isEmpty()) {
+            return new String[0];
+        }
+
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+
+            if (c == '(') {
+                depth++;
+            } else if (c == ')') {
+                depth--;
+            } else if ((c == ',') && (depth == 0)) {
+                values.add(text.substring(start, i));
+                start = i + 1;
+            }
+        }
+
+        values.add(text.substring(start));
+        return values.toArray(new String[0]);
+    }
+
+    private static String[] copyOfRange(String[] array, int from) {
+        String[] copy = new String[array.length - from];
+        System.arraycopy(array, from, copy, 0, copy.length);
+        return copy;
     }
 
     /** Defines the sample classes from the zip, so the original and the recompiled classes never mix. */

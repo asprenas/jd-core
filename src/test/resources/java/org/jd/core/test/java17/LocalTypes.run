@@ -1,0 +1,6 @@
+# Local records, enums and interfaces
+localRecord list:ab|cde
+localRecord list:
+localEnum 3
+localEnum 9
+localInterface

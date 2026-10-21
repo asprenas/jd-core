@@ -1,0 +1,16 @@
+# Unnamed variables and patterns
+unusedCatch 12
+unusedCatch x
+unusedForEach list:a|b|c
+unusedForEach list:
+unusedLocals
+recordPattern Point(3,4)
+recordPattern abc
+switchPattern Circle(Point(1,2),3)
+switchPattern Square(Point(1,2),5)
+typeOnly int:1
+typeOnly abc
+typeOnly long:1
+multiplePatterns int:1
+multiplePatterns long:1
+multiplePatterns abc

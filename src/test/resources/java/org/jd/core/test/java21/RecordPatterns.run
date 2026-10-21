@@ -1,0 +1,19 @@
+# Record patterns: deconstruction, nesting, guards, generic records
+instanceofPattern Point(1,2)
+instanceofPattern abc
+nestedPattern Line(Point(1,2),Point(4,8))
+nestedPattern Point(1,2)
+switchPattern Point(3,3)
+switchPattern Point(1,2)
+switchPattern Line(Point(0,0),Point(1,1))
+switchPattern abc
+sum Leaf(4)
+sum Pair(Leaf(1),Leaf(2))
+sum Pair(Pair(Leaf(1),Leaf(2)),Leaf(3))
+sum Pair(Leaf(1),Pair(Leaf(2),Leaf(3)))
+genericExhaustive Box(abc)
+genericInstanceof Box(abc)
+genericInstanceof Box(int:1)
+andCondition Point(2,1)
+andCondition Point(1,2)
+andCondition abc

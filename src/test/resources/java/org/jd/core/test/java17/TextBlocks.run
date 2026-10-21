@@ -1,0 +1,9 @@
+# Text block values must be identical, including escapes and trailing spaces
+html
+noTrailingNewline
+escapes
+lineContinuation
+trailingSpaces
+formatted abc
+concatenated x
+json 7

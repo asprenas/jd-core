@@ -1,0 +1,16 @@
+# Statements before super(...) / this(...)
+new Validated abc
+new Validated abc
+new Validated ""
+new Validated null
+new PreInit 4
+new PreInit -4
+new FieldBeforeSuper abc
+new ThisCall 3
+new ThisCall 3 4
+new LoopBeforeSuper array:a||b
+new TryBeforeSuper 12
+new TryBeforeSuper x
+new SwitchBeforeSuper 0
+new SwitchBeforeSuper 1
+new SwitchBeforeSuper 5
