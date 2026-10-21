@@ -1469,6 +1469,11 @@ public class ByteCodeParser {
         String name1 = constants.getConstantUtf8(cnat1.getNameIndex());
         String descriptor1 = constants.getConstantUtf8(cnat1.getDescriptorIndex());
 
+        // 'String::trim' passed to 'map(Function<? super T, ? extends R>)': 'Function<String, String>' binds 'R'.
+        // 's -> s.isEmpty()' passed to 'filter(Predicate<? super T>)': 'Predicate<String>'
+        Type methodReferenceType = (bootstrapArguments.length < 3) ? indyMethodTypes.returnedType :
+            makeFunctionalInterfaceType(indyMethodTypes.returnedType, indyMethodName, descriptor0, constants.getConstantUtf8(((ConstantMethodType)constants.getConstant(bootstrapArguments[2])).getDescriptorIndex()));
+
         if (typeName.equals(internalTypeName)) {
             for (ClassFileConstructorOrMethodDeclaration methodDeclaration : bodyDeclaration.getMethodDeclarations()) {
                 if (((methodDeclaration.getFlags() & (FLAG_SYNTHETIC|FLAG_PRIVATE)) == (FLAG_SYNTHETIC|FLAG_PRIVATE)) && methodDeclaration.getMethod().getName().equals(name1) && methodDeclaration.getMethod().getDescriptor().equals(descriptor1)) {
@@ -1479,7 +1484,7 @@ public class ByteCodeParser {
                         new CreateInstructionsVisitor(typeMaker).visit((MethodDeclaration)cfmd);
                     }
                     stack.push(new LambdaIdentifiersExpression(
-                            lineNumber, indyMethodTypes.returnedType, indyMethodTypes.returnedType,
+                            lineNumber, methodReferenceType, indyMethodTypes.returnedType,
                             prepareLambdaParameterNames(cfmd.getFormalParameters(), parameterCount),
                             prepareLambdaStatements(cfmd.getFormalParameters(), indyParameters, cfmd.getStatements())));
                     return;
@@ -1494,13 +1499,98 @@ public class ByteCodeParser {
             if (name1.equals("<init>")) {
                 stack.push(new ConstructorReferenceExpression(lineNumber, indyMethodTypes.returnedType, ot, descriptor1));
             } else {
-                stack.push(new MethodReferenceExpression(lineNumber, indyMethodTypes.returnedType, new ObjectTypeReferenceExpression(lineNumber, ot), typeName, name1, descriptor1));
+                stack.push(new MethodReferenceExpression(lineNumber, methodReferenceType, new ObjectTypeReferenceExpression(lineNumber, ot), typeName, name1, descriptor1));
             }
             return;
         }
 
         // Create method reference
-        stack.push(new MethodReferenceExpression(lineNumber, indyMethodTypes.returnedType, (Expression)indyParameters, typeName, name1, descriptor1));
+        stack.push(new MethodReferenceExpression(lineNumber, methodReferenceType, (Expression)indyParameters, typeName, name1, descriptor1));
+    }
+
+    /**
+     * @param rawType                the functional interface ('Function')
+     * @param samName                the name of its abstract method ('apply')
+     * @param samDescriptor          the erased descriptor of its abstract method ('(Ljava/lang/Object;)Ljava/lang/Object;')
+     * @param instantiatedDescriptor the 'instantiatedMethodType' of LambdaMetafactory ('(Ljava/lang/String;)Ljava/lang/String;')
+     * @return the parameterized type ('Function<String, String>'), or 'rawType' when a type parameter is not bound to a
+     *         class without type parameters (the instantiated types are erased: 'List' may be 'List<String>')
+     */
+    private Type makeFunctionalInterfaceType(Type rawType, String samName, String samDescriptor, String instantiatedDescriptor) {
+        if (!rawType.isObjectType() || (((ObjectType)rawType).getTypeArguments() != null) || (rawType.getDimension() != 0)) {
+            return rawType;
+        }
+
+        ObjectType objectType = (ObjectType)rawType;
+        TypeMaker.TypeTypes typeTypes = typeMaker.makeTypeTypes(objectType.getInternalName());
+
+        if ((typeTypes == null) || (typeTypes.typeParameters == null)) {
+            return rawType;
+        }
+
+        TypeMaker.MethodTypes sam = typeMaker.makeMethodTypes(objectType.getInternalName(), samName, samDescriptor);
+        TypeMaker.MethodTypes instantiated = typeMaker.makeMethodTypes(instantiatedDescriptor);
+        int samParameterCount = (sam.parameterTypes == null) ? 0 : sam.parameterTypes.size();
+        int instantiatedParameterCount = (instantiated.parameterTypes == null) ? 0 : instantiated.parameterTypes.size();
+
+        if (samParameterCount != instantiatedParameterCount) {
+            return rawType;
+        }
+
+        HashMap<String, Type> bindings = new HashMap<>();
+
+        for (int i = 0; i < samParameterCount; i++) {
+            if (!bindFunctionalInterfaceTypeParameter(bindings, sam.parameterTypes.getList().get(i), instantiated.parameterTypes.getList().get(i))) {
+                return rawType;
+            }
+        }
+        if (!bindFunctionalInterfaceTypeParameter(bindings, sam.returnedType, instantiated.returnedType)) {
+            return rawType;
+        }
+
+        DefaultList<TypeParameter> typeParameters = new DefaultList<>();
+
+        if (typeTypes.typeParameters.isList()) {
+            for (TypeParameter typeParameter : (TypeParameters)typeTypes.typeParameters) {
+                typeParameters.add(typeParameter);
+            }
+        } else {
+            typeParameters.add(typeTypes.typeParameters.getFirst());
+        }
+
+        TypeArguments typeArguments = new TypeArguments(typeParameters.size());
+
+        for (TypeParameter typeParameter : typeParameters) {
+            Type type = bindings.get(typeParameter.getIdentifier());
+
+            if (!(type instanceof ObjectType)) {
+                return rawType;
+            }
+            typeArguments.add((ObjectType)type);
+        }
+
+        return objectType.createType((typeArguments.size() == 1) ? typeArguments.getFirst() : typeArguments);
+    }
+
+    /** @return false if 'samType' is a type parameter bound to two different types */
+    private boolean bindFunctionalInterfaceTypeParameter(HashMap<String, Type> bindings, Type samType, Type instantiatedType) {
+        if (!samType.isGenericType() || (samType.getDimension() != 0) || !instantiatedType.isObjectType() || (instantiatedType.getDimension() != 0)) {
+            return true;
+        }
+        if (TYPE_OBJECT.equals(instantiatedType)) {
+            // Erased type variable ('item -> ...' in a generic method '<T> m(List<T>)'): not bound
+            return true;
+        }
+
+        TypeMaker.TypeTypes typeTypes = typeMaker.makeTypeTypes(((ObjectType)instantiatedType).getInternalName());
+
+        if ((typeTypes == null) || (typeTypes.typeParameters != null)) {
+            // An erased generic type ('List' may be 'List<String>'): not bound
+            return true;
+        }
+
+        Type previous = bindings.put(samType.getName(), instantiatedType);
+        return (previous == null) || previous.equals(instantiatedType);
     }
 
     private List<String> prepareLambdaParameterNames(BaseFormalParameter formalParameters, int parameterCount) {

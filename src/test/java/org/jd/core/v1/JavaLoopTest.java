@@ -292,7 +292,7 @@ public class JavaLoopTest {
         assertTrue(source.matches(PatternMaker.make(": 310 */", "for (int j : new int[] { 4 })")));
         assertTrue(source.matches(PatternMaker.make(": 389 */", "for (String s : array)")));
         assertTrue(source.matches(PatternMaker.make(": 403 */", "for (String s : list)")));
-        assertTrue(source.matches(PatternMaker.make(": 411 */", "Iterator<Class<?>> iterator = Arrays.<Class<?>>asList(getClass().getInterfaces()).iterator()")));
+        assertTrue(source.matches(PatternMaker.make(": 411 */", "Iterator<Class<?>> iterator = Arrays.asList(getClass().getInterfaces()).iterator()")));
 
         assertTrue(source.indexOf("/* 524: 524 */") != -1);
 
@@ -337,7 +337,7 @@ public class JavaLoopTest {
         assertTrue(source.matches(PatternMaker.make(": 349 */", "while (i < 10);")));
         assertTrue(source.matches(PatternMaker.make(": 385 */", "for (String str : paramArrayOfString)")));
         assertTrue(source.matches(PatternMaker.make(": 399 */", "for (String str : paramList)")));
-        assertTrue(source.matches(PatternMaker.make(": 411 */", "Iterator<Class<?>> iterator = Arrays.<Class<?>>asList(getClass().getInterfaces()).iterator()")));
+        assertTrue(source.matches(PatternMaker.make(": 411 */", "Iterator<Class<?>> iterator = Arrays.asList(getClass().getInterfaces()).iterator()")));
         assertTrue(source.matches(PatternMaker.make(": 427 */", "for (int i = 0; i < 3; i++)")));
 
         // Recompile decompiled source code and check errors
@@ -361,7 +361,7 @@ public class JavaLoopTest {
         assertTrue(source.matches(PatternMaker.make(": 349 */", "while (i < 10);")));
         assertTrue(source.matches(PatternMaker.make(": 385 */", "for (String s : array)")));
         assertTrue(source.matches(PatternMaker.make(": 399 */", "for (String s : list)")));
-        assertTrue(source.matches(PatternMaker.make(": 411 */", "Iterator<Class<?>> iterator = Arrays.<Class<?>>asList(getClass().getInterfaces()).iterator()")));
+        assertTrue(source.matches(PatternMaker.make(": 411 */", "Iterator<Class<?>> iterator = Arrays.asList(getClass().getInterfaces()).iterator()")));
         assertTrue(source.matches(PatternMaker.make(": 427 */", "for (int i = 0; i < 3; i++)")));
 
         // Recompile decompiled source code and check errors
@@ -384,7 +384,7 @@ public class JavaLoopTest {
         assertTrue(source.matches(PatternMaker.make(": 349 */", "while (i < 10);")));
         assertTrue(source.matches(PatternMaker.make(": 385 */", "for (String s : array)")));
         assertTrue(source.matches(PatternMaker.make(": 399 */", "for (String s : list)")));
-        assertTrue(source.matches(PatternMaker.make(": 411 */", "Iterator<Class<?>> iterator = Arrays.<Class<?>>asList(getClass().getInterfaces()).iterator()")));
+        assertTrue(source.matches(PatternMaker.make(": 411 */", "Iterator<Class<?>> iterator = Arrays.asList(getClass().getInterfaces()).iterator()")));
         assertTrue(source.matches(PatternMaker.make(": 427 */", "for (int i = 0; i < 3; i++)")));
 
         // Recompile decompiled source code and check errors
