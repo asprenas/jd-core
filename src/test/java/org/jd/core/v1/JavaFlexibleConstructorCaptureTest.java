@@ -8,11 +8,14 @@ import org.junit.jupiter.api.Test;
 import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /** Java 25 flexible constructor bodies: captured variables used before 'super(...)' (remaining item B3) */
 public class JavaFlexibleConstructorCaptureTest {
     @Test
     public void localClassCapture() throws Exception {
+        assumeTrue(InMemorySample.runtimeFeatureVersion() >= 25, "flexible constructor bodies need a JDK 25+");
+
         String source =
             "package p;\n" +
             "public class Capture {\n" +
