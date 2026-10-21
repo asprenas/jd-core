@@ -18,6 +18,7 @@ import org.jd.core.v1.model.javasyntax.declaration.*;
 import org.jd.core.v1.model.javasyntax.expression.*;
 import org.jd.core.v1.model.javasyntax.reference.BaseAnnotationReference;
 import org.jd.core.v1.model.javasyntax.reference.ElementValue;
+import org.jd.core.v1.model.javasyntax.reference.TypeAnnotationReferences;
 import org.jd.core.v1.model.javasyntax.type.*;
 import org.jd.core.v1.model.message.Message;
 import org.jd.core.v1.model.processor.Processor;
@@ -84,10 +85,12 @@ public class ConvertClassFileProcessor implements Processor {
         TypeMaker.TypeTypes typeTypes = parser.parseClassFileSignature(classFile);
         ClassFileBodyDeclaration bodyDeclaration = convertBodyDeclaration(parser, converter, classFile, typeTypes.typeParameters, outerClassFileBodyDeclaration);
 
-        return new ClassFileInterfaceDeclaration(
+        ClassFileInterfaceDeclaration declaration = new ClassFileInterfaceDeclaration(
                 annotationReferences, classFile.getAccessFlags(),
                 typeTypes.thisType.getInternalName(), typeTypes.thisType.getName(),
                 typeTypes.typeParameters, typeTypes.interfaces, bodyDeclaration);
+        declaration.setTypeAnnotationReferences(convertTypeAnnotationReferences(converter, classFile));
+        return declaration;
     }
 
     protected ClassFileEnumDeclaration convertEnumDeclaration(TypeMaker parser, AnnotationConverter converter, ClassFile classFile, ClassFileBodyDeclaration outerClassFileBodyDeclaration) {
@@ -95,10 +98,12 @@ public class ConvertClassFileProcessor implements Processor {
         TypeMaker.TypeTypes typeTypes = parser.parseClassFileSignature(classFile);
         ClassFileBodyDeclaration bodyDeclaration = convertBodyDeclaration(parser, converter, classFile, typeTypes.typeParameters, outerClassFileBodyDeclaration);
 
-        return new ClassFileEnumDeclaration(
+        ClassFileEnumDeclaration declaration = new ClassFileEnumDeclaration(
                 annotationReferences, classFile.getAccessFlags(),
                 typeTypes.thisType.getInternalName(), typeTypes.thisType.getName(),
                 typeTypes.interfaces, bodyDeclaration);
+        declaration.setTypeAnnotationReferences(convertTypeAnnotationReferences(converter, classFile));
+        return declaration;
     }
 
     protected ClassFileAnnotationDeclaration convertAnnotationDeclaration(TypeMaker parser, AnnotationConverter converter, ClassFile classFile, ClassFileBodyDeclaration outerClassFileBodyDeclaration) {
@@ -106,10 +111,12 @@ public class ConvertClassFileProcessor implements Processor {
         TypeMaker.TypeTypes typeTypes = parser.parseClassFileSignature(classFile);
         ClassFileBodyDeclaration bodyDeclaration = convertBodyDeclaration(parser, converter, classFile, typeTypes.typeParameters, outerClassFileBodyDeclaration);
 
-        return new ClassFileAnnotationDeclaration(
+        ClassFileAnnotationDeclaration declaration = new ClassFileAnnotationDeclaration(
                 annotationReferences, classFile.getAccessFlags(),
                 typeTypes.thisType.getInternalName(), typeTypes.thisType.getName(),
                 bodyDeclaration);
+        declaration.setTypeAnnotationReferences(convertTypeAnnotationReferences(converter, classFile));
+        return declaration;
     }
 
     protected ClassFileClassDeclaration convertClassDeclaration(TypeMaker parser, AnnotationConverter converter, ClassFile classFile, ClassFileBodyDeclaration outerClassFileBodyDeclaration) {
@@ -117,11 +124,13 @@ public class ConvertClassFileProcessor implements Processor {
         TypeMaker.TypeTypes typeTypes = parser.parseClassFileSignature(classFile);
         ClassFileBodyDeclaration bodyDeclaration = convertBodyDeclaration(parser, converter, classFile, typeTypes.typeParameters, outerClassFileBodyDeclaration);
 
-        return new ClassFileClassDeclaration(
+        ClassFileClassDeclaration declaration = new ClassFileClassDeclaration(
                 annotationReferences, classFile.getAccessFlags(),
                 typeTypes.thisType.getInternalName(), typeTypes.thisType.getName(),
                 typeTypes.typeParameters, typeTypes.superType,
                 typeTypes.interfaces, bodyDeclaration);
+        declaration.setTypeAnnotationReferences(convertTypeAnnotationReferences(converter, classFile));
+        return declaration;
     }
 
     protected ClassFileBodyDeclaration convertBodyDeclaration(TypeMaker parser, AnnotationConverter converter, ClassFile classFile, BaseTypeParameter typeParameters, ClassFileBodyDeclaration outerClassFileBodyDeclaration) {
@@ -164,7 +173,10 @@ public class ConvertClassFileProcessor implements Processor {
                 ExpressionVariableInitializer variableInitializer = convertFieldInitializer(field, typeField);
                 FieldDeclarator fieldDeclarator = new FieldDeclarator(field.getName(), variableInitializer);
 
-                list.add(new ClassFileFieldDeclaration(annotationReferences, field.getAccessFlags(), typeField, fieldDeclarator));
+                ClassFileFieldDeclaration fieldDeclaration = new ClassFileFieldDeclaration(annotationReferences, field.getAccessFlags(), typeField, fieldDeclarator);
+
+                fieldDeclaration.setTypeAnnotationReferences(convertTypeAnnotationReferences(converter, field));
+                list.add(fieldDeclaration);
             }
 
             return list;
@@ -217,9 +229,12 @@ public class ConvertClassFileProcessor implements Processor {
                 }
 
                 if ("<init>".equals(name)) {
-                    list.add(new ClassFileConstructorDeclaration(
+                    ClassFileConstructorDeclaration constructorDeclaration = new ClassFileConstructorDeclaration(
                             bodyDeclaration, classFile, method, annotationReferences, methodTypes.typeParameters,
-                            methodTypes.parameterTypes, methodTypes.exceptionTypes, bindings, typeBounds, firstLineNumber));
+                            methodTypes.parameterTypes, methodTypes.exceptionTypes, bindings, typeBounds, firstLineNumber);
+
+                    constructorDeclaration.setTypeAnnotationReferences(convertTypeAnnotationReferences(converter, method));
+                    list.add(constructorDeclaration);
                 } else if ("<clinit>".equals(name)) {
                     list.add(new ClassFileStaticInitializerDeclaration(bodyDeclaration, classFile, method, bindings, typeBounds, firstLineNumber));
                 } else {
@@ -227,6 +242,7 @@ public class ConvertClassFileProcessor implements Processor {
                             bodyDeclaration, classFile, method, annotationReferences, name, methodTypes.typeParameters,
                             methodTypes.returnedType, methodTypes.parameterTypes, methodTypes.exceptionTypes, defaultAnnotationValue,
                             bindings, typeBounds, firstLineNumber);
+                    methodDeclaration.setTypeAnnotationReferences(convertTypeAnnotationReferences(converter, method));
                     if (classFile.isInterface()) {
                         if (methodDeclaration.getFlags() == Constants.ACC_PUBLIC) {
                             // For interfaces, add 'default' access flag on public methods
@@ -288,6 +304,26 @@ public class ConvertClassFileProcessor implements Processor {
         Annotations invisibles = method.getAttribute("RuntimeInvisibleAnnotations");
 
         return converter.convert(visibles, invisibles);
+    }
+
+    protected TypeAnnotationReferences convertTypeAnnotationReferences(AnnotationConverter converter, ClassFile classFile) {
+        return converter.convert(
+                classFile.getAttribute("RuntimeVisibleTypeAnnotations"), classFile.getAttribute("RuntimeInvisibleTypeAnnotations"),
+                null, null);
+    }
+
+    protected TypeAnnotationReferences convertTypeAnnotationReferences(AnnotationConverter converter, Field field) {
+        return converter.convert(
+                field.getAttribute("RuntimeVisibleTypeAnnotations"), field.getAttribute("RuntimeInvisibleTypeAnnotations"),
+                new Annotations[] { field.getAttribute("RuntimeVisibleAnnotations"), field.getAttribute("RuntimeInvisibleAnnotations") },
+                null);
+    }
+
+    protected TypeAnnotationReferences convertTypeAnnotationReferences(AnnotationConverter converter, Method method) {
+        return converter.convert(
+                method.getAttribute("RuntimeVisibleTypeAnnotations"), method.getAttribute("RuntimeInvisibleTypeAnnotations"),
+                new Annotations[] { method.getAttribute("RuntimeVisibleAnnotations"), method.getAttribute("RuntimeInvisibleAnnotations") },
+                new AttributeParameterAnnotations[] { method.getAttribute("RuntimeVisibleParameterAnnotations"), method.getAttribute("RuntimeInvisibleParameterAnnotations") });
     }
 
     protected ExpressionVariableInitializer convertFieldInitializer(Field field, Type typeField) {

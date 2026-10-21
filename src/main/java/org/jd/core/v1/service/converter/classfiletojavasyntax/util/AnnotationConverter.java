@@ -50,6 +50,73 @@ public class AnnotationConverter implements ElementValueVisitor {
         }
     }
 
+    /**
+     * @param declarationAnnotations annotations already printed on the declaration: javac copies an annotation whose
+     *                               targets contain both a declaration and 'TYPE_USE' into both attributes
+     * @param parameterAnnotations   annotations already printed on the formal parameters, or null
+     * @return the annotations of the declared types, or null
+     */
+    public TypeAnnotationReferences convert(
+            AttributeTypeAnnotations visibles, AttributeTypeAnnotations invisibles,
+            Annotations[] declarationAnnotations, AttributeParameterAnnotations[] parameterAnnotations) {
+        TypeAnnotationReferences references = new TypeAnnotationReferences();
+
+        for (AttributeTypeAnnotations attribute : new AttributeTypeAnnotations[] { visibles, invisibles }) {
+            if (attribute != null) {
+                for (TypeAnnotation ta : attribute.getTypeAnnotations()) {
+                    String descriptor = ta.getAnnotation().getDescriptor();
+
+                    if (ta.getTypePath().isEmpty()) {
+                        int targetType = ta.getTargetType();
+
+                        if (((targetType == TypeAnnotationReferences.FIELD) || (targetType == TypeAnnotationReferences.METHOD_RETURN)) && contains(declarationAnnotations, descriptor)) {
+                            continue;
+                        }
+                        if ((targetType == TypeAnnotationReferences.METHOD_FORMAL_PARAMETER) && contains(parameterAnnotations, ta.getTargetIndex(), descriptor)) {
+                            continue;
+                        }
+                    }
+
+                    references.add(ta.getTargetType(), ta.getTargetIndex(), ta.getTypePath(), convert(ta.getAnnotation()));
+                }
+            }
+        }
+
+        return references.isEmpty() ? null : references;
+    }
+
+    protected static boolean contains(Annotations[] annotationsArray, String descriptor) {
+        if (annotationsArray != null) {
+            for (Annotations annotations : annotationsArray) {
+                if (annotations != null) {
+                    for (Annotation a : annotations.getAnnotations()) {
+                        if (descriptor.equals(a.getDescriptor())) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    protected static boolean contains(AttributeParameterAnnotations[] parameterAnnotations, int index, String descriptor) {
+        if (parameterAnnotations != null) {
+            for (AttributeParameterAnnotations apa : parameterAnnotations) {
+                if (apa != null) {
+                    Annotations[] array = apa.getParameterAnnotations();
+
+                    if ((array != null) && (index < array.length) && contains(new Annotations[] { array[index] }, descriptor)) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
     @SuppressWarnings("unchecked")
     protected BaseAnnotationReference convert(Annotations annotations) {
         Annotation[] as = annotations.getAnnotations();

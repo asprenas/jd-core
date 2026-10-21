@@ -8,10 +8,12 @@
 package org.jd.core.v1.model.javasyntax.declaration;
 
 import org.jd.core.v1.model.javasyntax.reference.BaseAnnotationReference;
+import org.jd.core.v1.model.javasyntax.reference.TypeAnnotationReferences;
 import org.jd.core.v1.model.javasyntax.type.Type;
 
 public class FieldDeclaration implements MemberDeclaration {
     protected BaseAnnotationReference annotationReferences;
+    protected TypeAnnotationReferences typeAnnotationReferences;
     protected int flags;
     protected Type type;
     protected BaseFieldDeclarator fieldDeclarators;
@@ -92,5 +94,13 @@ public class FieldDeclaration implements MemberDeclaration {
     @Override
     public String toString() {
         return "FieldDeclaration{" + type + " " + fieldDeclarators + "}";
+    }
+
+    public TypeAnnotationReferences getTypeAnnotationReferences() {
+        return typeAnnotationReferences;
+    }
+
+    public void setTypeAnnotationReferences(TypeAnnotationReferences typeAnnotationReferences) {
+        this.typeAnnotationReferences = typeAnnotationReferences;
     }
 }

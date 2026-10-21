@@ -8,6 +8,7 @@
 package org.jd.core.v1.model.javasyntax.declaration;
 
 import org.jd.core.v1.model.javasyntax.reference.BaseAnnotationReference;
+import org.jd.core.v1.model.javasyntax.reference.TypeAnnotationReferences;
 import org.jd.core.v1.model.javasyntax.statement.BaseStatement;
 import org.jd.core.v1.model.javasyntax.type.BaseType;
 import org.jd.core.v1.model.javasyntax.type.BaseTypeParameter;
@@ -16,6 +17,7 @@ import static org.jd.core.v1.model.classfile.Constants.ACC_STATIC;
 
 public class ConstructorDeclaration implements MemberDeclaration {
     protected BaseAnnotationReference annotationReferences;
+    protected TypeAnnotationReferences typeAnnotationReferences;
     protected int flags;
     protected BaseTypeParameter typeParameters;
     protected BaseFormalParameter formalParameters;
@@ -92,5 +94,13 @@ public class ConstructorDeclaration implements MemberDeclaration {
     @Override
     public String toString() {
         return "ConstructorDeclaration{" + descriptor + "}";
+    }
+
+    public TypeAnnotationReferences getTypeAnnotationReferences() {
+        return typeAnnotationReferences;
+    }
+
+    public void setTypeAnnotationReferences(TypeAnnotationReferences typeAnnotationReferences) {
+        this.typeAnnotationReferences = typeAnnotationReferences;
     }
 }

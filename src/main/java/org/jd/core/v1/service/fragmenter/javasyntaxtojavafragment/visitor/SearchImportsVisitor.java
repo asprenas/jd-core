@@ -15,6 +15,8 @@ import org.jd.core.v1.model.javasyntax.declaration.*;
 import org.jd.core.v1.model.javasyntax.expression.*;
 import org.jd.core.v1.model.javasyntax.reference.AnnotationElementValue;
 import org.jd.core.v1.model.javasyntax.reference.AnnotationReference;
+import org.jd.core.v1.model.javasyntax.reference.AnnotationReferences;
+import org.jd.core.v1.model.javasyntax.reference.TypeAnnotationReferences;
 import org.jd.core.v1.model.javasyntax.type.BaseType;
 import org.jd.core.v1.model.javasyntax.type.ObjectType;
 import org.jd.core.v1.service.fragmenter.javasyntaxtojavafragment.util.JavaFragmentFactory;
@@ -55,6 +57,44 @@ public class SearchImportsVisitor extends AbstractJavaSyntaxVisitor {
         if (!internalTypeNames.contains(declaration.getInternalTypeName())) {
             internalTypeNames.add(declaration.getInternalTypeName());
             safeAccept(declaration.getMemberDeclarations());
+        }
+    }
+
+    @Override
+    public void visit(ClassDeclaration declaration) {
+        super.visit(declaration);
+        acceptTypeAnnotations(declaration.getTypeAnnotationReferences());
+    }
+
+    @Override
+    public void visit(InterfaceDeclaration declaration) {
+        super.visit(declaration);
+        acceptTypeAnnotations(declaration.getTypeAnnotationReferences());
+    }
+
+    @Override
+    public void visit(FieldDeclaration declaration) {
+        super.visit(declaration);
+        acceptTypeAnnotations(declaration.getTypeAnnotationReferences());
+    }
+
+    @Override
+    public void visit(ConstructorDeclaration declaration) {
+        super.visit(declaration);
+        acceptTypeAnnotations(declaration.getTypeAnnotationReferences());
+    }
+
+    @Override
+    public void visit(MethodDeclaration declaration) {
+        super.visit(declaration);
+        acceptTypeAnnotations(declaration.getTypeAnnotationReferences());
+    }
+
+    protected void acceptTypeAnnotations(TypeAnnotationReferences typeAnnotationReferences) {
+        if (typeAnnotationReferences != null) {
+            for (AnnotationReferences<AnnotationReference> references : typeAnnotationReferences.getAnnotationReferences()) {
+                references.accept(this);
+            }
         }
     }
 

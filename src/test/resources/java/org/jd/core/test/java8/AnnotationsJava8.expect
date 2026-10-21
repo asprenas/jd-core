@@ -1,0 +1,4 @@
+# Phase 5-4: type annotations on declarations (return, parameter, type argument, throws, type parameter)
+# Annotations in method bodies (local variable, cast) are not supported yet
++ public @NonNull String typeUse(@NonNull String param, List<@NonNull String> list) throws @NonNull RuntimeException
++ public <@NonNull T> T typeParameter(T value)

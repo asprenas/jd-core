@@ -50,6 +50,9 @@ public class CompilationUnitVisitor extends StatementVisitor {
     protected AnnotationVisitor annotationVisitor = new AnnotationVisitor();
     protected SingleLineStatementVisitor singleLineStatementVisitor = new SingleLineStatementVisitor();
     protected String mainInternalName;
+    // Type annotations of the method whose formal parameters are visited
+    protected TypeAnnotationReferences formalParameterTypeAnnotationReferences;
+    protected int formalParameterIndex;
 
     public CompilationUnitVisitor(Loader loader, String mainInternalTypeName, int majorVersion, ImportsFragment importsFragment) {
         super(loader, mainInternalTypeName, majorVersion, importsFragment);
@@ -368,9 +371,21 @@ public class CompilationUnitVisitor extends StatementVisitor {
                 // Build tokens for type parameters
                 BaseTypeParameter typeParameters = declaration.getTypeParameters();
 
+                TypeAnnotationReferences typeAnnotationReferences = declaration.getTypeAnnotationReferences();
+
+                if (typeAnnotationReferences != null) {
+                    // Type annotations of the constructed type ('public @A Constructor()'): written as modifiers
+                    AnnotationReferences<AnnotationReference> references = typeAnnotationReferences.get(TypeAnnotationReferences.METHOD_RETURN, -1, "");
+
+                    if (references != null) {
+                        references.accept(this);
+                        tokens.add(TextToken.SPACE);
+                    }
+                }
+
                 if (typeParameters != null) {
                     tokens.add(TextToken.LEFTANGLEBRACKET);
-                    typeParameters.accept(this);
+                    visitAnnotatedType(typeParameters, typeAnnotationReferences, TypeAnnotationReferences.METHOD_TYPE_PARAMETER, 0, "");
                     tokens.add(TextToken.RIGHTANGLEBRACKET);
                     tokens.add(TextToken.SPACE);
                 }
@@ -391,7 +406,7 @@ public class CompilationUnitVisitor extends StatementVisitor {
                     tokens.add(StartBlockToken.START_PARAMETERS_BLOCK);
                     fragments.addTokensFragment(tokens);
 
-                    formalParameters.accept(this);
+                    visitFormalParameters(formalParameters, typeAnnotationReferences);
 
                     tokens = new Tokens();
                     tokens.add(EndBlockToken.END_PARAMETERS_BLOCK);
@@ -403,7 +418,7 @@ public class CompilationUnitVisitor extends StatementVisitor {
                     tokens.add(TextToken.SPACE);
                     tokens.add(THROWS);
                     tokens.add(TextToken.SPACE);
-                    exceptionTypes.accept(this);
+                    visitExceptionTypes(exceptionTypes, typeAnnotationReferences);
                 }
 
                 if (statements != null) {
@@ -659,7 +674,7 @@ public class CompilationUnitVisitor extends StatementVisitor {
 
             BaseType type = declaration.getType();
 
-            type.accept(this);
+            visitAnnotatedType(type, declaration.getTypeAnnotationReferences(), TypeAnnotationReferences.FIELD, -1, "");
 
             tokens.add(StartBlockToken.START_DECLARATION_OR_STATEMENT_BLOCK);
             fragments.addTokensFragment(tokens);
@@ -734,10 +749,17 @@ public class CompilationUnitVisitor extends StatementVisitor {
             tokens.add(TextToken.SPACE);
         }
 
+        TypeAnnotationReferences typeAnnotationReferences = formalParameterTypeAnnotationReferences;
+        int index = formalParameterIndex++;
+
+        // Formal parameters of the lambdas of the method body are not annotated
+        formalParameterTypeAnnotationReferences = null;
+
         if (declaration.isVarargs()) {
             Type arrayType = declaration.getType();
             BaseType type = arrayType.createType(arrayType.getDimension() - 1);
-            type.accept(this);
+            // 'String...' is an array: the printed type is its element type
+            visitAnnotatedType(type, typeAnnotationReferences, TypeAnnotationReferences.METHOD_FORMAL_PARAMETER, index, "0,0;");
             tokens.add(TextToken.VARARGS);
         } else {
             if (declaration.isFinal()) {
@@ -747,14 +769,42 @@ public class CompilationUnitVisitor extends StatementVisitor {
 
             BaseType type = declaration.getType();
 
-            type.accept(this);
+            visitAnnotatedType(type, typeAnnotationReferences, TypeAnnotationReferences.METHOD_FORMAL_PARAMETER, index, "");
             tokens.add(TextToken.SPACE);
         }
+
+        formalParameterTypeAnnotationReferences = typeAnnotationReferences;
 
         String name = declaration.getName();
 
         tokens.add(newTextToken(name));
         currentMethodParamNames.add(name);
+    }
+
+    protected void visitFormalParameters(BaseFormalParameter formalParameters, TypeAnnotationReferences typeAnnotationReferences) {
+        formalParameterTypeAnnotationReferences = typeAnnotationReferences;
+        formalParameterIndex = 0;
+        formalParameters.accept(this);
+        formalParameterTypeAnnotationReferences = null;
+    }
+
+    @SuppressWarnings("unchecked")
+    protected void visitExceptionTypes(BaseType exceptionTypes, TypeAnnotationReferences typeAnnotationReferences) {
+        if (typeAnnotationReferences == null) {
+            exceptionTypes.accept(this);
+        } else if (exceptionTypes.isList()) {
+            List<Type> list = exceptionTypes.getList();
+            int size = list.size();
+
+            for (int i=0; i<size; i++) {
+                if (i > 0) {
+                    tokens.add(TextToken.COMMA_SPACE);
+                }
+                visitAnnotatedType(list.get(i), typeAnnotationReferences, TypeAnnotationReferences.THROWS, i, "");
+            }
+        } else {
+            visitAnnotatedType(exceptionTypes.getFirst(), typeAnnotationReferences, TypeAnnotationReferences.THROWS, 0, "");
+        }
     }
 
     @Override
@@ -1136,16 +1186,18 @@ public class CompilationUnitVisitor extends StatementVisitor {
             // Build tokens for type parameters
             BaseTypeParameter typeParameters = declaration.getTypeParameters();
 
+            TypeAnnotationReferences typeAnnotationReferences = declaration.getTypeAnnotationReferences();
+
             if (typeParameters != null) {
                 tokens.add(TextToken.LEFTANGLEBRACKET);
-                typeParameters.accept(this);
+                visitAnnotatedType(typeParameters, typeAnnotationReferences, TypeAnnotationReferences.METHOD_TYPE_PARAMETER, 0, "");
                 tokens.add(TextToken.RIGHTANGLEBRACKET);
                 tokens.add(TextToken.SPACE);
             }
 
             BaseType returnedType = declaration.getReturnedType();
 
-            returnedType.accept(this);
+            visitAnnotatedType(returnedType, typeAnnotationReferences, TypeAnnotationReferences.METHOD_RETURN, -1, "");
             tokens.add(TextToken.SPACE);
 
             // Build token for type declaration
@@ -1162,7 +1214,7 @@ public class CompilationUnitVisitor extends StatementVisitor {
                 tokens.add(StartBlockToken.START_PARAMETERS_BLOCK);
                 fragments.addTokensFragment(tokens);
 
-                formalParameters.accept(this);
+                visitFormalParameters(formalParameters, typeAnnotationReferences);
 
                 tokens = new Tokens();
                 tokens.add(EndBlockToken.END_PARAMETERS_BLOCK);
@@ -1174,7 +1226,7 @@ public class CompilationUnitVisitor extends StatementVisitor {
                 tokens.add(TextToken.SPACE);
                 tokens.add(THROWS);
                 tokens.add(TextToken.SPACE);
-                exceptions.accept(this);
+                visitExceptionTypes(exceptions, typeAnnotationReferences);
             }
 
             BaseStatement statements = declaration.getStatements();
@@ -1343,7 +1395,7 @@ public class CompilationUnitVisitor extends StatementVisitor {
 
         if (typeParameters != null) {
             tokens.add(TextToken.LEFTANGLEBRACKET);
-            typeParameters.accept(this);
+            visitAnnotatedType(typeParameters, declaration.getTypeAnnotationReferences(), TypeAnnotationReferences.CLASS_TYPE_PARAMETER, 0, "");
             tokens.add(TextToken.RIGHTANGLEBRACKET);
         }
     }
