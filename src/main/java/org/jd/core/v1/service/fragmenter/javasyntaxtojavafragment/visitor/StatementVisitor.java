@@ -904,8 +904,8 @@ public class StatementVisitor extends ExpressionVisitor {
 
     @Override
     public void visit(TypeDeclarationStatement statement) {
+        // 'class Local {}': a declaration, not followed by ';'
         statement.getTypeDeclaration().accept(this);
-        fragments.add(TokensFragment.SEMICOLON);
     }
 
     @Override

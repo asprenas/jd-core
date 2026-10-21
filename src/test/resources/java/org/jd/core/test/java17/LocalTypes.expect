@@ -1,0 +1,3 @@
+# Phase 3: local record / enum / interface
+~ record Entry\(String name, int length\) \{\}
+- {};
