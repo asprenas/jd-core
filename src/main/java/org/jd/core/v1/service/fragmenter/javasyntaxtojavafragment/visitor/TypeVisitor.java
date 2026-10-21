@@ -207,10 +207,24 @@ public class TypeVisitor extends AbstractJavaSyntaxVisitor {
         String path = typeAnnotationPath;
         String elementPath = elementTypeAnnotationPath(type.getDimension());
 
-        visitTypeAnnotations(elementPath);
-
         // Build token for type reference
-        tokens.add(newTypeReferenceToken(type, currentInternalTypeName));
+        ReferenceToken typeReferenceToken = newTypeReferenceToken(type, currentInternalTypeName);
+
+        if ((typeAnnotationReferences != null) && (typeAnnotationReferences.get(typeAnnotationTarget, typeAnnotationIndex, elementPath) != null)) {
+            String printedName = typeReferenceToken.getName();
+            String name = type.getName();
+
+            if (!printedName.equals(name) && printedName.endsWith("." + name)) {
+                // 'java.sql.@A Date': an annotation of a qualified type is before the simple name (JLS 9.7.4)
+                tokens.add(newTextToken(printedName.substring(0, printedName.length() - name.length())));
+                visitTypeAnnotations(elementPath);
+                typeReferenceToken = new ReferenceToken(ReferenceToken.TYPE, type.getInternalName(), name, null, currentInternalTypeName);
+            } else {
+                visitTypeAnnotations(elementPath);
+            }
+        }
+
+        tokens.add(typeReferenceToken);
 
         if (genericTypesSupported) {
             // Build token for type arguments
