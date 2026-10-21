@@ -212,6 +212,7 @@ public class SearchImportsVisitor extends AbstractJavaSyntaxVisitor {
     public void visit(InstanceOfExpression expression) {
         if (maxLineNumber < expression.getLineNumber()) maxLineNumber = expression.getLineNumber();
         super.visit(expression);
+        acceptTypeAnnotations(expression.getTypeAnnotationReferences());
     }
 
     @Override
@@ -270,6 +271,7 @@ public class SearchImportsVisitor extends AbstractJavaSyntaxVisitor {
         type.accept(this);
         safeAccept(expression.getParameters());
         safeAccept(expression.getBodyDeclaration());
+        acceptTypeAnnotations(expression.getTypeAnnotationReferences());
     }
 
     @Override

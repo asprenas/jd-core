@@ -31,6 +31,8 @@ public class TypeAnnotationReferences {
     public static final int LOCAL_VARIABLE          = 0x40;
     public static final int RESOURCE_VARIABLE       = 0x41;
     public static final int CATCH                   = 0x42;
+    public static final int INSTANCEOF              = 0x43;
+    public static final int NEW                     = 0x44;
     public static final int CAST                    = 0x47;
 
     public static final int EXTENDS_INDEX = 65535;

@@ -7,11 +7,13 @@
 
 package org.jd.core.v1.model.javasyntax.expression;
 
+import org.jd.core.v1.model.javasyntax.reference.TypeAnnotationReferences;
 import org.jd.core.v1.model.javasyntax.declaration.BodyDeclaration;
 import org.jd.core.v1.model.javasyntax.type.ObjectType;
 import org.jd.core.v1.model.javasyntax.type.Type;
 
 public class NewExpression extends AbstractLineNumberExpression {
+    protected TypeAnnotationReferences typeAnnotationReferences;
     protected ObjectType type;
     protected String descriptor;
     protected BaseExpression parameters;
@@ -73,6 +75,14 @@ public class NewExpression extends AbstractLineNumberExpression {
 
     @Override
     public boolean isNewExpression() { return true; }
+
+    public TypeAnnotationReferences getTypeAnnotationReferences() {
+        return typeAnnotationReferences;
+    }
+
+    public void setTypeAnnotationReferences(TypeAnnotationReferences typeAnnotationReferences) {
+        this.typeAnnotationReferences = typeAnnotationReferences;
+    }
 
     @Override
     public void accept(ExpressionVisitor visitor) {

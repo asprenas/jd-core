@@ -7,11 +7,13 @@
 
 package org.jd.core.v1.model.javasyntax.expression;
 
+import org.jd.core.v1.model.javasyntax.reference.TypeAnnotationReferences;
 import org.jd.core.v1.model.javasyntax.type.ObjectType;
 import org.jd.core.v1.model.javasyntax.type.PrimitiveType;
 import org.jd.core.v1.model.javasyntax.type.Type;
 
 public class InstanceOfExpression extends AbstractLineNumberExpression {
+    protected TypeAnnotationReferences typeAnnotationReferences;
     protected Expression expression;
     protected Type instanceOfType;
     protected Expression pattern; // Java 21+ record pattern 'o instanceof Point(int x, int y)', or null
@@ -59,6 +61,14 @@ public class InstanceOfExpression extends AbstractLineNumberExpression {
     @Override
     public int getPriority() {
         return 8;
+    }
+
+    public TypeAnnotationReferences getTypeAnnotationReferences() {
+        return typeAnnotationReferences;
+    }
+
+    public void setTypeAnnotationReferences(TypeAnnotationReferences typeAnnotationReferences) {
+        this.typeAnnotationReferences = typeAnnotationReferences;
     }
 
     @Override
