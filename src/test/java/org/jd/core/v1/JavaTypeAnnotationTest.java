@@ -147,6 +147,52 @@ public class JavaTypeAnnotationTest {
             new JavaSourceFileObject("p/Args", source)), "the decompiled source does not recompile");
     }
 
+    /** Remaining item C3: type arguments of constructor invocations (0x48) and references (0x4A, 0x4B) */
+    @Test
+    public void constructorAndReferenceTypeArguments() throws Exception {
+        Map<String, String> sources = new LinkedHashMap<>();
+        sources.put("p/A",
+            "package p;\n" +
+            "import java.lang.annotation.*;\n" +
+            "@Retention(RetentionPolicy.RUNTIME) @Target(ElementType.TYPE_USE) public @interface A {}\n");
+        sources.put("p/G",
+            "package p;\n" +
+            "import java.util.Date;\n" +
+            "import java.util.function.*;\n" +
+            "public class G {\n" +
+            "    <T> G(T t) {}\n" +
+            "    G() {}\n" +
+            "    static <T> T id(T t) { return t; }\n" +
+            "    public G make() {\n" +
+            "        return new <@A String>G(\"x\");\n" +
+            "    }\n" +
+            "    public G plain() {\n" +
+            "        return new G(\"y\");\n" +
+            "    }\n" +
+            "    public G makeDate(Date d) {\n" +
+            "        return new <@A Date>G(d);\n" +
+            "    }\n" +
+            "    public Function<String, G> constructorReference() {\n" +
+            "        return G::<@A String>new;\n" +
+            "    }\n" +
+            "    public Function<String, String> methodReference() {\n" +
+            "        return G::<@A String>id;\n" +
+            "    }\n" +
+            "}\n");
+
+        InMemorySample sample = new InMemorySample(sources, "-g", "--release", "11");
+        String source = sample.decompile("p/G", Collections.emptyMap());
+
+        assertTrue(source.contains("new <@A String>G(\"x\")"), "constructor invocation");
+        assertTrue(source.contains("new <@A Date>G(d)"), "constructor invocation, imported type");
+        assertTrue(source.contains("new G(\"y\")"), "generic constructor without cast to its type parameter");
+        assertTrue(source.contains("G::<@A String>new"), "constructor reference");
+        assertTrue(source.contains("G::<@A String>id"), "method reference");
+        assertTrue(CompilerUtil.compile("11",
+            new JavaSourceFileObject("p/A", sources.get("p/A")),
+            new JavaSourceFileObject("p/G", source)), "the decompiled source does not recompile");
+    }
+
     /** Remaining item C6: upcasts consumed by 'areturn', 'putfield' and invocations */
     @Test
     public void upcasts() throws Exception {
