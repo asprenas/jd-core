@@ -8,10 +8,13 @@
 package org.jd.core.v1.model.javasyntax.expression;
 
 import org.jd.core.v1.model.javasyntax.reference.TypeAnnotationReferences;
+import org.jd.core.v1.model.javasyntax.type.BaseTypeArgument;
 import org.jd.core.v1.model.javasyntax.type.Type;
 
 public class MethodReferenceExpression extends AbstractLineNumberTypeExpression {
     protected TypeAnnotationReferences typeAnnotationReferences;
+    // Explicit type arguments of a generic method or constructor: 'new <String>G("x")', 'G::<String>m'
+    protected BaseTypeArgument nonWildcardTypeArguments;
     protected Expression expression;
     protected String internalTypeName;
     protected String name;
@@ -55,6 +58,14 @@ public class MethodReferenceExpression extends AbstractLineNumberTypeExpression 
     @Override
     public String getDescriptor() {
         return descriptor;
+    }
+
+    public BaseTypeArgument getNonWildcardTypeArguments() {
+        return nonWildcardTypeArguments;
+    }
+
+    public void setNonWildcardTypeArguments(BaseTypeArgument nonWildcardTypeArguments) {
+        this.nonWildcardTypeArguments = nonWildcardTypeArguments;
     }
 
     public TypeAnnotationReferences getTypeAnnotationReferences() {

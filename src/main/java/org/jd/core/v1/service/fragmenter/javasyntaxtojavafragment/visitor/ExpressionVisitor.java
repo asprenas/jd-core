@@ -207,6 +207,7 @@ public class ExpressionVisitor extends TypeVisitor {
         }
         tokens.add(TextToken.COLON_COLON);
         //tokens.add(new ReferenceToken(ReferenceToken.CONSTRUCTOR, ot.getInternalName(), "new", expression.getDescriptor(), currentInternalTypeName));
+        visitTypeArgumentsOfReference(expression.getNonWildcardTypeArguments(), expression.getTypeAnnotationReferences(), TypeAnnotationReferences.CONSTRUCTOR_REFERENCE_TYPE_ARGUMENT);
         tokens.add(NEW);
     }
 
@@ -505,16 +506,7 @@ public class ExpressionVisitor extends TypeVisitor {
         if ((nonWildcardTypeArguments != null) && dot) {
             tokens.add(TextToken.LEFTANGLEBRACKET);
             if (annotatedTypeArguments) {
-                int size = nonWildcardTypeArguments.typeArgumentSize();
-
-                for (int i = 0; i < size; i++) {
-                    if (i > 0) {
-                        tokens.add(TextToken.COMMA_SPACE);
-                    }
-                    // 'type_argument_index' i
-                    TypeArgument typeArgument = nonWildcardTypeArguments.isTypeArgumentList() ? nonWildcardTypeArguments.getTypeArgumentList().get(i) : nonWildcardTypeArguments.getTypeArgumentFirst();
-                    visitAnnotatedType((BaseType)typeArgument, expression.getTypeAnnotationReferences(), TypeAnnotationReferences.METHOD_INVOCATION_TYPE_ARGUMENT, i, "");
-                }
+                visitAnnotatedTypeArguments(nonWildcardTypeArguments, expression.getTypeAnnotationReferences(), TypeAnnotationReferences.METHOD_INVOCATION_TYPE_ARGUMENT);
             } else {
                 nonWildcardTypeArguments.accept(this);
             }
@@ -534,6 +526,28 @@ public class ExpressionVisitor extends TypeVisitor {
         tokens.add(EndBlockToken.END_PARAMETERS_BLOCK);
     }
 
+    /** '<@A String>': only the annotated type arguments of references and 'new' are kept (see ByteCodeParser) */
+    protected void visitTypeArgumentsOfReference(BaseTypeArgument typeArguments, TypeAnnotationReferences references, int target) {
+        if ((typeArguments != null) && (references != null)) {
+            tokens.add(TextToken.LEFTANGLEBRACKET);
+            visitAnnotatedTypeArguments(typeArguments, references, target);
+            tokens.add(TextToken.RIGHTANGLEBRACKET);
+        }
+    }
+
+    protected void visitAnnotatedTypeArguments(BaseTypeArgument typeArguments, TypeAnnotationReferences references, int target) {
+        int size = typeArguments.typeArgumentSize();
+
+        for (int i = 0; i < size; i++) {
+            if (i > 0) {
+                tokens.add(TextToken.COMMA_SPACE);
+            }
+            // 'type_argument_index' i
+            TypeArgument typeArgument = typeArguments.isTypeArgumentList() ? typeArguments.getTypeArgumentList().get(i) : typeArguments.getTypeArgumentFirst();
+            visitAnnotatedType((BaseType)typeArgument, references, target, i, "");
+        }
+    }
+
     @Override
     public void visit(MethodReferenceExpression expression) {
         Expression reference = expression.getExpression();
@@ -547,6 +561,7 @@ public class ExpressionVisitor extends TypeVisitor {
         }
         tokens.addLineNumberToken(expression);
         tokens.add(TextToken.COLON_COLON);
+        visitTypeArgumentsOfReference(expression.getNonWildcardTypeArguments(), expression.getTypeAnnotationReferences(), TypeAnnotationReferences.METHOD_REFERENCE_TYPE_ARGUMENT);
         tokens.add(new ReferenceToken(ReferenceToken.METHOD, expression.getInternalTypeName(), expression.getName(), expression.getDescriptor(), currentInternalTypeName));
     }
 
@@ -609,6 +624,8 @@ public class ExpressionVisitor extends TypeVisitor {
         tokens.addLineNumberToken(expression);
         tokens.add(NEW);
         tokens.add(TextToken.SPACE);
+        // 'new <@A String>G("x")'
+        visitTypeArgumentsOfReference(expression.getNonWildcardTypeArguments(), expression.getTypeAnnotationReferences(), TypeAnnotationReferences.CONSTRUCTOR_INVOCATION_TYPE_ARGUMENT);
 
         ObjectType objectType = expression.getObjectType();
 

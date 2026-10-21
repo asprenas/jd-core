@@ -174,7 +174,7 @@ public class ByteCodeParser {
         return map;
     }
 
-    /** Type annotations of the 'instanceof' (0x43) and 'new' (0x44) instructions, by offset */
+    /** Type annotations of the 'instanceof', 'new', invocation and 'invokedynamic' instructions (0x43 ~ 0x4B), by offset */
     protected static Map<Integer, TypeAnnotationReferences> makeInstructionTypeAnnotations(TypeMaker typeMaker, Method method) {
         AttributeCode code = method.getAttribute("Code");
         Map<Integer, TypeAnnotationReferences> map = null;
@@ -189,13 +189,15 @@ public class ByteCodeParser {
                     for (TypeAnnotation ta : attribute.getTypeAnnotations()) {
                         int targetType = ta.getTargetType();
 
-                        boolean typeArgument = (targetType == TypeAnnotationReferences.METHOD_INVOCATION_TYPE_ARGUMENT);
+                        // 0x48 ~ 0x4B, except 0x47 (cast)
+                        boolean typeArgument = (targetType >= TypeAnnotationReferences.CONSTRUCTOR_INVOCATION_TYPE_ARGUMENT) && (targetType <= TypeAnnotationReferences.METHOD_REFERENCE_TYPE_ARGUMENT);
+                        int offset = (targetType == TypeAnnotationReferences.METHOD_INVOCATION_TYPE_ARGUMENT) ? getInvocationOffset(code.getCode(), ta.getTargetIndex()) : ta.getTargetIndex();
 
                         if (((targetType >= TypeAnnotationReferences.INSTANCEOF) && (targetType <= TypeAnnotationReferences.METHOD_REFERENCE)) || typeArgument) {
                             if (map == null) {
                                 map = new HashMap<>();
                             }
-                            map.computeIfAbsent(typeArgument ? getInvocationOffset(code.getCode(), ta.getTargetIndex()) : ta.getTargetIndex(), k -> new TypeAnnotationReferences())
+                            map.computeIfAbsent(offset, k -> new TypeAnnotationReferences())
                                .add(targetType, typeArgument ? ta.getSecondIndex() : 0, ta.getTypePath(), annotationConverter.convertTypeAnnotation(ta));
                         }
                     }
@@ -922,6 +924,15 @@ public class ByteCodeParser {
 
                                 if (expression1.isNewExpression()) {
                                     typeParametersToTypeArgumentsBinder.updateNewExpression((ClassFileNewExpression)expression1, descriptor, methodTypes, parameters);
+                                    if (methodTypes.typeParameters != null) {
+                                        // '<T> G(T t)': the parameter types of a generic constructor are bound to the argument types
+                                        ClassFileNewExpression ne = (ClassFileNewExpression)expression1;
+                                        ne.setParameterTypes(bindMethodTypeParameters(ne.getParameterTypes(), methodTypes.typeParameters, getTypes(parameters)));
+                                        if (ne.getTypeAnnotationReferences() != null) {
+                                            // 'new <@A String>G("x")'
+                                            ne.setNonWildcardTypeArguments(inferTypeArguments(methodTypes, getTypes(parameters)));
+                                        }
+                                    }
                                 } else if (ot.getDescriptor().equals(expression1.getType().getDescriptor())) {
                                     statements.add(new ExpressionStatement(typeParametersToTypeArgumentsBinder.newConstructorInvocationExpression(lineNumber, ot, descriptor, methodTypes, parameters)));
                                 } else {
@@ -1559,10 +1570,12 @@ public class ByteCodeParser {
             if (name1.equals("<init>")) {
                 ConstructorReferenceExpression constructorReference = new ConstructorReferenceExpression(lineNumber, indyMethodTypes.returnedType, ot, descriptor1);
                 constructorReference.setTypeAnnotationReferences(references);
+                constructorReference.setNonWildcardTypeArguments(inferReferenceTypeArguments(constants, references, typeName, name1, descriptor1, bootstrapArguments));
                 stack.push(constructorReference);
             } else {
                 MethodReferenceExpression methodReference = new MethodReferenceExpression(lineNumber, methodReferenceType, new ObjectTypeReferenceExpression(lineNumber, ot), typeName, name1, descriptor1);
                 methodReference.setTypeAnnotationReferences(references);
+                methodReference.setNonWildcardTypeArguments(inferReferenceTypeArguments(constants, references, typeName, name1, descriptor1, bootstrapArguments));
                 stack.push(methodReference);
             }
             return;
@@ -1570,6 +1583,121 @@ public class ByteCodeParser {
 
         // Create method reference
         stack.push(new MethodReferenceExpression(lineNumber, methodReferenceType, (Expression)indyParameters, typeName, name1, descriptor1));
+    }
+
+    /**
+     * 'G::<@A String>m', 'G::<@A String>new': the type arguments of the referenced method, bound with the
+     * parameter types of the 'instantiatedMethodType' of LambdaMetafactory. Only computed for annotated type arguments
+     */
+    private BaseTypeArgument inferReferenceTypeArguments(ConstantPool constants, TypeAnnotationReferences references, String typeName, String name, String descriptor, int[] bootstrapArguments) {
+        if ((references == null) || (bootstrapArguments.length < 3)) {
+            return null;
+        }
+
+        TypeMaker.MethodTypes referenced = makeMethodTypes(typeName, name, descriptor);
+        String instantiatedDescriptor = constants.getConstantUtf8(((ConstantMethodType)constants.getConstant(bootstrapArguments[2])).getDescriptorIndex());
+        List<Type> argumentTypes = getTypes(typeMaker.makeMethodTypes(instantiatedDescriptor).parameterTypes);
+        int parameterCount = (referenced.parameterTypes == null) ? 0 : referenced.parameterTypes.size();
+
+        if (argumentTypes.size() == parameterCount + 1) {
+            // 'String::m': the first argument is the receiver
+            argumentTypes = argumentTypes.subList(1, argumentTypes.size());
+        }
+
+        return inferTypeArguments(referenced, argumentTypes);
+    }
+
+    /**
+     * @return the type arguments of a generic method or constructor: each type parameter used as the type of a parameter
+     *         ('<T> G(T t)') is bound to the type of the argument. null if one is not bound to an object type
+     */
+    protected static BaseTypeArgument inferTypeArguments(TypeMaker.MethodTypes methodTypes, List<Type> argumentTypes) {
+        if ((methodTypes.typeParameters == null) || (methodTypes.parameterTypes == null)) {
+            return null;
+        }
+
+        List<Type> parameterTypes = getTypes(methodTypes.parameterTypes);
+
+        if (parameterTypes.size() != argumentTypes.size()) {
+            return null;
+        }
+
+        TypeArguments typeArguments = new TypeArguments();
+
+        for (TypeParameter typeParameter : methodTypes.typeParameters) {
+            Type bound = null;
+
+            for (int i = 0; i < parameterTypes.size(); i++) {
+                Type parameterType = parameterTypes.get(i);
+
+                if (parameterType.isGenericType() && (parameterType.getDimension() == 0) && typeParameter.getIdentifier().equals(parameterType.getName())) {
+                    Type argumentType = argumentTypes.get(i);
+                    bound = ((argumentType != null) && argumentType.isObjectType()) ? argumentType : null;
+                    break;
+                }
+            }
+
+            if (bound == null) {
+                return null;
+            }
+            typeArguments.add(bound);
+        }
+
+        return (typeArguments.size() == 1) ? typeArguments.getFirst() : typeArguments;
+    }
+
+    /** The parameter types using a type parameter of the method: the type of the argument, or Object */
+    protected static BaseType bindMethodTypeParameters(BaseType parameterTypes, BaseTypeParameter typeParameters, List<Type> argumentTypes) {
+        List<Type> types = getTypes(parameterTypes);
+
+        if (types.isEmpty() || (types.size() != argumentTypes.size())) {
+            return parameterTypes;
+        }
+
+        Types bound = new Types();
+
+        for (int i = 0; i < types.size(); i++) {
+            Type type = types.get(i);
+
+            if (type.isGenericType() && (type.getDimension() == 0) && isTypeParameter(typeParameters, type.getName())) {
+                Type argumentType = argumentTypes.get(i);
+                type = ((argumentType != null) && argumentType.isObjectType()) ? argumentType : ObjectType.TYPE_OBJECT;
+            }
+            bound.add(type);
+        }
+
+        return (bound.size() == 1) ? bound.getFirst() : bound;
+    }
+
+    protected static boolean isTypeParameter(BaseTypeParameter typeParameters, String name) {
+        for (TypeParameter typeParameter : typeParameters) {
+            if (typeParameter.getIdentifier().equals(name)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    protected static List<Type> getTypes(BaseType types) {
+        List<Type> list = new ArrayList<>();
+
+        if (types != null) {
+            for (Type type : types) {
+                list.add(type);
+            }
+        }
+        return list;
+    }
+
+    protected static List<Type> getTypes(BaseExpression expressions) {
+        List<Type> list = new ArrayList<>();
+
+        if (expressions != null) {
+            for (Expression expression : expressions) {
+                list.add(expression.getType());
+            }
+        }
+        return list;
     }
 
     /**
