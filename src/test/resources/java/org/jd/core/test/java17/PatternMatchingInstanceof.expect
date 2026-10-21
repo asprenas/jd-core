@@ -1,3 +1,7 @@
-# Binding is rebuilt as instanceof + cast for now (Phase 4-1 switches this to a pattern)
-~ instanceof String
+# Phase 4-1: pattern instanceof
++ instanceof String s
++ o instanceof String s && s.length() > 3
+~ \(?o instanceof Integer i\)? \? i : -1
++ o instanceof int[] a && a.length > 0
 + .length()
+- (String)o

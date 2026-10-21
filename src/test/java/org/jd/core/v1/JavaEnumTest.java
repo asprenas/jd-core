@@ -56,7 +56,7 @@ public class JavaEnumTest {
         assertTrue(source.matches(PatternMaker.make(": 20 */", "NEPTUNE(1.024E26D, 2.4746E7D);")));
         assertTrue(source.indexOf("this.mass = mass;") != -1);
         assertTrue(source.matches(PatternMaker.make(": 27 */", "this.radius = radius;")));
-        assertTrue(source.matches(PatternMaker.make(": 37 */", "return 6.673E-11D * this.mass / this.radius * this.radius;")));
+        assertTrue(source.matches(PatternMaker.make(": 37 */", "return 6.673E-11D * this.mass / (this.radius * this.radius);")));
         assertTrue(source.matches(PatternMaker.make(": 49 */", "double earthWeight = Double.parseDouble(args[0]);")));
         assertTrue(source.matches(PatternMaker.make(": 50 */", "double mass = earthWeight / EARTH.surfaceGravity();")));
         assertTrue(source.matches(PatternMaker.make(": 51 */", "for (Planet p : values()) {")));
@@ -86,7 +86,7 @@ public class JavaEnumTest {
         assertTrue(source.matches(PatternMaker.make(": 20 */", "NEPTUNE(1.024E26D, 2.4746E7D);")));
         assertTrue(source.indexOf("this.mass = mass;") != -1);
         assertTrue(source.matches(PatternMaker.make(": 27 */", "this.radius = radius;")));
-        assertTrue(source.matches(PatternMaker.make(": 37 */", "return 6.673E-11D * this.mass / this.radius * this.radius;")));
+        assertTrue(source.matches(PatternMaker.make(": 37 */", "return 6.673E-11D * this.mass / (this.radius * this.radius);")));
         assertTrue(source.matches(PatternMaker.make(": 49 */", "double earthWeight = Double.parseDouble(args[0]);")));
         assertTrue(source.matches(PatternMaker.make(": 50 */", "double mass = earthWeight / EARTH.surfaceGravity();")));
         assertTrue(source.matches(PatternMaker.make(": 51 */", "for (Planet p : values()) {")));
@@ -116,7 +116,7 @@ public class JavaEnumTest {
         assertTrue(source.matches(PatternMaker.make(": 20 */", "NEPTUNE(1.024E26D, 2.4746E7D);")));
         assertTrue(source.indexOf("this.mass = mass;") != -1);
         assertTrue(source.matches(PatternMaker.make(": 27 */", "this.radius = radius;")));
-        assertTrue(source.matches(PatternMaker.make(": 37 */", "return 6.673E-11D * this.mass / this.radius * this.radius;")));
+        assertTrue(source.matches(PatternMaker.make(": 37 */", "return 6.673E-11D * this.mass / (this.radius * this.radius);")));
         assertTrue(source.matches(PatternMaker.make(": 49 */", "double earthWeight = Double.parseDouble(args[0]);")));
         assertTrue(source.matches(PatternMaker.make(": 50 */", "double mass = earthWeight / EARTH.surfaceGravity();")));
         assertTrue(source.matches(PatternMaker.make(": 51 */", "for (Planet p : values()) {")));

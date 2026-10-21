@@ -1,0 +1,21 @@
+# Phase 4-1: type patterns in conditions must keep their meaning
+length abc
+length int:5
+andCondition abcd
+andCondition ab
+andCondition int:5
+notPattern " x "
+notPattern int:5
+chain int:5
+chain abc
+chain ""
+chain null
+ternary int:5
+ternary abc
+whileLoop ""
+whileLoop int:5
+equalsLike abc
+arrayPattern abc
+reuseName abc int:1
+reuseName int:1 abc
+reuseName int:1 int:2

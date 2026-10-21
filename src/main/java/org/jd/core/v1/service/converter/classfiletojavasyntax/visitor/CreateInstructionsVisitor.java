@@ -126,6 +126,7 @@ public class CreateInstructionsVisitor extends AbstractJavaSyntaxVisitor {
             try {
                 HashMap<Integer, int[]> switchArguments = new HashMap<>();
                 Map<Integer, RecordPatternMaker.Region> recordPatterns = RecordPatternMaker.make(classFile, method, switchArguments);
+                recordPatterns = TypePatternMaker.make(classFile, method, recordPatterns);
                 ControlFlowGraph cfg = ControlFlowGraphMaker.make(method);
 
                 if (cfg != null) {

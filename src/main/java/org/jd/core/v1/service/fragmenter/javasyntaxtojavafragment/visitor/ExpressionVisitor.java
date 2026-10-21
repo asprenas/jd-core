@@ -88,9 +88,54 @@ public class ExpressionVisitor extends TypeVisitor {
                 tokens.add(TextToken.SPACE);
                 tokens.add(newTextToken(expression.getOperator()));
                 tokens.add(TextToken.SPACE);
-                visit(expression, expression.getRightExpression());
+
+                Expression rightExpression = expression.getRightExpression();
+
+                if (needsParenthesesOnRight(expression, rightExpression)) {
+                    tokens.add(TextToken.LEFTROUNDBRACKET);
+                    rightExpression.accept(this);
+                    tokens.add(TextToken.RIGHTROUNDBRACKET);
+                } else {
+                    visit(expression, rightExpression);
+                }
                 break;
         }
+    }
+
+    /**
+     * The binary operators from '*' (5) to '||' (14) are left-associative: 'a - (b - c)' is not 'a - b - c',
+     * 's + (i + 1)' is not 's + i + 1'. Same associative operators keep their output: 'a && b && c', 'i + j + k'.
+     */
+    protected static boolean needsParenthesesOnRight(BinaryOperatorExpression parent, Expression child) {
+        int priority = parent.getPriority();
+
+        if ((priority < 5) || (priority > 14) || !child.isBinaryOperatorExpression() || (child.getPriority() != priority)) {
+            return false;
+        }
+
+        String operator = parent.getOperator();
+
+        if (!operator.equals(child.getOperator())) {
+            return true;
+        }
+
+        switch (operator) {
+            case "&&": case "||": case "&": case "|": case "^":
+                return false;
+            case "+": case "*":
+                // Integer arithmetic is associative, not the string concatenation nor the floating point arithmetic
+                return !isIntegral(parent.getType()) || !isIntegral(child.getType());
+            default:
+                return true;
+        }
+    }
+
+    protected static boolean isIntegral(Type type) {
+        if (type.isPrimitiveType() && (type.getDimension() == 0)) {
+            int flags = ((PrimitiveType)type).getFlags();
+            return (flags & (PrimitiveType.FLAG_BOOLEAN | PrimitiveType.FLAG_FLOAT | PrimitiveType.FLAG_DOUBLE | PrimitiveType.FLAG_VOID)) == 0;
+        }
+        return false;
     }
 
     @Override

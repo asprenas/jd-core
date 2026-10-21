@@ -27,7 +27,8 @@ import java.util.List;
  *
  * Arguments are separated by blanks and converted to the parameter types of the only method with that
  * name and argument count: primitives and their wrappers, String ("null" is null, "\"\"" is the empty
- * string), enum constant names. Instance methods are called on a new instance (no-argument constructor).
+ * string), enum constant names. For an Object parameter, "int:5" is an Integer. Instance methods are called on
+ * a new instance (no-argument constructor).
  * Results are compared with String.valueOf, thrown exceptions by class name.
  */
 public final class RunComparison {
@@ -151,6 +152,9 @@ public final class RunComparison {
         }
         if (type.isEnum()) {
             return Enum.valueOf((Class<Enum>)type, value);
+        }
+        if (value.startsWith("int:") && !type.isPrimitive() && type.isAssignableFrom(Integer.class)) {
+            return Integer.valueOf(value.substring(4));
         }
         if (value.equals("\"\"")) {
             return "";
