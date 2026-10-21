@@ -19,21 +19,17 @@ public class CompilerUtil {
 
     public static boolean compile(String preferredJavaVersion, JavaFileObject... javaFileObjects) throws Exception {
         boolean compilationSuccess = false;
-        String javaVersion = getJavaVersion(preferredJavaVersion);
 
         DESTINATION_DIRECTORY.mkdirs();
 
         JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
         StringWriter writer = new StringWriter();
         DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<>();
-        List<String> options;
-
-        if (parseJavaVersion(System.getProperty("java.version")) <= 8) {
-            options = Arrays.asList("-source", javaVersion, "-target", javaVersion, "-d", DESTINATION_DIRECTORY_PATH, "-cp", System.getProperty("java.class.path"));
-        } else {
-            // Compile against the matching platform API, not the running JDK's (e.g. JDK 21 SequencedCollection)
-            options = Arrays.asList("--release", String.valueOf(parseJavaVersion(javaVersion)), "-Xlint:-options", "-d", DESTINATION_DIRECTORY_PATH, "-cp", System.getProperty("java.class.path"));
-        }
+        // Compile against the matching platform API, not the running JDK's (e.g. JDK 21 SequencedCollection).
+        // The versions older than the oldest release of the running javac ('1.5' -> 8 on JDK 25) are raised.
+        // -Xlint:-options hides 'source value 8 is obsolete and will be removed in a future release' (JDK 21+)
+        int release = Math.max(parseJavaVersion(preferredJavaVersion), oldestRelease(compiler));
+        List<String> options = Arrays.asList("--release", String.valueOf(release), "-Xlint:-options", "-d", DESTINATION_DIRECTORY_PATH, "-cp", System.getProperty("java.class.path"));
         List<JavaFileObject> compilationUnits = Arrays.asList(javaFileObjects);
 
         try (StandardJavaFileManager fileManager = compiler.getStandardFileManager(diagnostics, null, null)) {
@@ -67,20 +63,25 @@ public class CompilerUtil {
         return compilationSuccess;
     }
 
-    private static String getJavaVersion(String preferredJavaVersion) {
-        int numericSystemJavaVersion = parseJavaVersion(System.getProperty("java.version"));
+    private static int oldestRelease = -1;
 
-        if (numericSystemJavaVersion <= 8) {
-            return preferredJavaVersion;
-        } else {
-            int numericPreferredJavaVersion = parseJavaVersion(preferredJavaVersion);
+    /** The oldest '--release' value supported by the running javac: an unsupported one is rejected by 'getTask' */
+    private static synchronized int oldestRelease(JavaCompiler compiler) {
+        if (oldestRelease == -1) {
+            oldestRelease = Runtime.version().feature();
 
-            if (numericPreferredJavaVersion < 8) {
-                return "1.8";
-            } else {
-                return preferredJavaVersion;
+            for (int release = 6; release < Runtime.version().feature(); release++) {
+                try {
+                    compiler.getTask(null, null, null, Arrays.asList("--release", String.valueOf(release)), null, null);
+                    oldestRelease = release;
+                    break;
+                } catch (IllegalArgumentException e) {
+                    // Not supported
+                }
             }
         }
+
+        return oldestRelease;
     }
 
     private static int parseJavaVersion(String javaVersion) {

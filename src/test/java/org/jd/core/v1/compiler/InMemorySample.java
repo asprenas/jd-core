@@ -58,12 +58,6 @@ public final class InMemorySample {
         }
     }
 
-    /** @return the feature version of the running JDK (8 for '1.8'): '--release' must not exceed it */
-    public static int runtimeFeatureVersion() {
-        String version = System.getProperty("java.specification.version");
-        return Integer.parseInt(version.startsWith("1.") ? version.substring(2) : version);
-    }
-
     public String decompile(String internalTypeName, Map<String, Object> configuration) throws Exception {
         PlainTextPrinter printer = new PlainTextPrinter();
         Message message = new Message();

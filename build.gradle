@@ -43,12 +43,22 @@ java {
 }
 
 tasks.withType(JavaCompile).configureEach {
-    // Library bytecode stays Java 8 compatible; builds on JDK 21 and JDK 25.
-    options.release = 8
     options.compilerArgs << '-Xlint:deprecation'
     options.compilerArgs << '-Xlint:unchecked'
+    // Hides 'source value 8 is obsolete and will be removed in a future release' (JDK 21+): when a JDK removes
+    // '--release 8', the library build needs an older JDK (toolchain) or a newer release
     options.compilerArgs << '-Xlint:-options'
     options.encoding = 'UTF-8'
+}
+
+tasks.named('compileJava') {
+    // Library bytecode stays Java 8 compatible for the applications using jd-core
+    options.release = 8
+}
+
+tasks.named('compileTestJava') {
+    // Tests are not published: Java 17, the minimum JDK of Gradle 9
+    options.release = 17
 }
 
 tasks.named('test') {
