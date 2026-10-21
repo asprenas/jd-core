@@ -8,9 +8,11 @@
 package org.jd.core.v1.model.javasyntax.declaration;
 
 import org.jd.core.v1.model.javasyntax.reference.BaseAnnotationReference;
+import org.jd.core.v1.model.javasyntax.reference.TypeAnnotationReferences;
 
 public abstract class TypeDeclaration implements BaseTypeDeclaration, MemberDeclaration {
     protected BaseAnnotationReference annotationReferences;
+    protected TypeAnnotationReferences typeAnnotationReferences;
     protected int flags;
     protected String internalTypeName;
     protected String name;
@@ -46,5 +48,13 @@ public abstract class TypeDeclaration implements BaseTypeDeclaration, MemberDecl
 
     public BodyDeclaration getBodyDeclaration() {
         return bodyDeclaration;
+    }
+
+    public TypeAnnotationReferences getTypeAnnotationReferences() {
+        return typeAnnotationReferences;
+    }
+
+    public void setTypeAnnotationReferences(TypeAnnotationReferences typeAnnotationReferences) {
+        this.typeAnnotationReferences = typeAnnotationReferences;
     }
 }

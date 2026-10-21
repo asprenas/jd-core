@@ -17,6 +17,7 @@ import org.jd.core.v1.model.classfile.constant.*;
 import org.jd.core.v1.util.DefaultList;
 
 import java.io.UTFDataFormatException;
+import java.util.ArrayList;
 import java.util.HashMap;
 
 import static org.jd.core.v1.model.classfile.Constants.ACC_SYNTHETIC;
@@ -360,6 +361,12 @@ public class ClassFileDeserializer {
                     case "RuntimeInvisibleParameterAnnotations":
                     case "RuntimeVisibleParameterAnnotations":
                         attributes.put(name, new AttributeParameterAnnotations(loadParameterAnnotations(reader, constants)));
+                        break;
+                    case "RuntimeInvisibleTypeAnnotations":
+                    case "RuntimeVisibleTypeAnnotations":
+                        TypeAnnotation[] typeAnnotations = loadTypeAnnotations(reader, constants);
+                        if (typeAnnotations != null)
+                            attributes.put(name, new AttributeTypeAnnotations(typeAnnotations));
                         break;
                     case "Signature":
                         if (attributeLength != 2)
@@ -714,6 +721,68 @@ public class ClassFileDeserializer {
         }
 
         return annotations;
+    }
+
+    protected TypeAnnotation[] loadTypeAnnotations(ClassFileReader reader, ConstantPool constants) {
+        int count = reader.readUnsignedShort();
+        if (count == 0)
+            return null;
+
+        ArrayList<TypeAnnotation> typeAnnotations = new ArrayList<>(count);
+
+        for (int i=0; i<count; i++) {
+            int targetType = reader.readUnsignedByte();
+            int targetIndex = -1;
+
+            // 'target_info'
+            switch (targetType) {
+                case 0x00: case 0x01: // type_parameter_target
+                case 0x16:            // formal_parameter_target
+                    targetIndex = reader.readUnsignedByte();
+                    break;
+                case 0x10:            // supertype_target
+                case 0x17:            // throws_target
+                    targetIndex = reader.readUnsignedShort();
+                    break;
+                case 0x11: case 0x12: // type_parameter_bound_target
+                    targetIndex = reader.readUnsignedByte();
+                    reader.readUnsignedByte();
+                    break;
+                case 0x13: case 0x14: case 0x15: // empty_target
+                    break;
+                case 0x40: case 0x41: // localvar_target
+                    reader.skip(reader.readUnsignedShort() * 6);
+                    break;
+                case 0x42:            // catch_target
+                case 0x43: case 0x44: case 0x45: case 0x46: // offset_target
+                    reader.readUnsignedShort();
+                    break;
+                case 0x47: case 0x48: case 0x49: case 0x4A: case 0x4B: // type_argument_target
+                    reader.readUnsignedShort();
+                    reader.readUnsignedByte();
+                    break;
+                default:
+                    throw new ClassFileFormatException("Invalid type annotation target type");
+            }
+
+            // 'type_path'
+            int pathLength = reader.readUnsignedByte();
+            StringBuilder typePath = new StringBuilder();
+
+            for (int j=0; j<pathLength; j++) {
+                typePath.append(reader.readUnsignedByte()).append(',').append(reader.readUnsignedByte()).append(';');
+            }
+
+            String descriptor = constants.getConstantUtf8(reader.readUnsignedShort());
+            Annotation annotation = new Annotation(descriptor, loadElementValuePairs(reader, constants));
+
+            if (targetType < 0x40) {
+                // Keep annotations of declarations only: those of the method body (local variables, casts, ...) are not supported
+                typeAnnotations.add(new TypeAnnotation(targetType, targetIndex, typePath.toString(), annotation));
+            }
+        }
+
+        return typeAnnotations.isEmpty() ? null : typeAnnotations.toArray(new TypeAnnotation[0]);
     }
 
     protected Annotations[] loadParameterAnnotations(ClassFileReader reader, ConstantPool constants) {

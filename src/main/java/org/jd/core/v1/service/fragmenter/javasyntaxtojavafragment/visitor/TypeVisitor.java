@@ -12,6 +12,9 @@ import org.jd.core.v1.api.printer.Printer;
 import org.jd.core.v1.model.javafragment.ImportsFragment;
 import org.jd.core.v1.model.javasyntax.AbstractJavaSyntaxVisitor;
 import org.jd.core.v1.model.javasyntax.expression.Expression;
+import org.jd.core.v1.model.javasyntax.reference.AnnotationReference;
+import org.jd.core.v1.model.javasyntax.reference.AnnotationReferences;
+import org.jd.core.v1.model.javasyntax.reference.TypeAnnotationReferences;
 import org.jd.core.v1.model.javasyntax.type.*;
 import org.jd.core.v1.model.token.*;
 import org.jd.core.v1.util.DefaultList;
@@ -55,6 +58,12 @@ public class TypeVisitor extends AbstractJavaSyntaxVisitor {
     protected String currentInternalTypeName;
     protected HashMap<String, TextToken> textTokenCache = new HashMap<>();
 
+    // Type annotations of the declared type being visited: 'typeAnnotationPath' is the JVMS 'type_path' of the visited type
+    protected TypeAnnotationReferences typeAnnotationReferences;
+    protected int typeAnnotationTarget;
+    protected int typeAnnotationIndex;
+    protected String typeAnnotationPath = "";
+
     public TypeVisitor(Loader loader, String mainInternalTypeName, int majorVersion, ImportsFragment importsFragment) {
         this.loader = loader;
         this.genericTypesSupported = (majorVersion >= 49); // (majorVersion >= Java 5)
@@ -66,7 +75,90 @@ public class TypeVisitor extends AbstractJavaSyntaxVisitor {
 
     @Override
     public void visit(TypeArguments arguments) {
-        buildTokensForList(arguments, TextToken.COMMA_SPACE);
+        if (typeAnnotationReferences == null) {
+            buildTokensForList(arguments, TextToken.COMMA_SPACE);
+        } else {
+            String path = typeAnnotationPath;
+            int size = arguments.size();
+
+            for (int i=0; i<size; i++) {
+                if (i > 0) {
+                    tokens.add(TextToken.COMMA_SPACE);
+                }
+                typeAnnotationPath = path + "3," + i + ";";
+                arguments.get(i).accept(this);
+            }
+
+            typeAnnotationPath = path;
+        }
+    }
+
+    /**
+     * Visit a declared type and print its type annotations.
+     *
+     * @param path 'type_path' of 'type' in the declared type
+     */
+    protected void visitAnnotatedType(BaseType type, TypeAnnotationReferences references, int target, int index, String path) {
+        visitAnnotated(type, references, target, index, path);
+    }
+
+    protected void visitAnnotatedType(BaseTypeParameter typeParameters, TypeAnnotationReferences references, int target, int index, String path) {
+        visitAnnotated(typeParameters, references, target, index, path);
+    }
+
+    private void visitAnnotated(Object visitable, TypeAnnotationReferences references, int target, int index, String path) {
+        TypeAnnotationReferences oldReferences = typeAnnotationReferences;
+        int oldTarget = typeAnnotationTarget;
+        int oldIndex = typeAnnotationIndex;
+        String oldPath = typeAnnotationPath;
+
+        typeAnnotationReferences = references;
+        typeAnnotationTarget = target;
+        typeAnnotationIndex = index;
+        typeAnnotationPath = path;
+
+        if (visitable instanceof BaseType) {
+            ((BaseType)visitable).accept(this);
+        } else {
+            ((BaseTypeParameter)visitable).accept(this);
+        }
+
+        typeAnnotationReferences = oldReferences;
+        typeAnnotationTarget = oldTarget;
+        typeAnnotationIndex = oldIndex;
+        typeAnnotationPath = oldPath;
+    }
+
+    /**
+     * Print the type annotations of the type at 'path', followed by a space.
+     */
+    protected void visitTypeAnnotations(String path) {
+        if (typeAnnotationReferences != null) {
+            AnnotationReferences<AnnotationReference> references = typeAnnotationReferences.get(typeAnnotationTarget, typeAnnotationIndex, path);
+
+            if (references != null) {
+                TypeAnnotationReferences oldReferences = typeAnnotationReferences;
+
+                // The types of the annotations are not annotated
+                typeAnnotationReferences = null;
+                references.accept(this);
+                tokens.add(TextToken.SPACE);
+                typeAnnotationReferences = oldReferences;
+            }
+        }
+    }
+
+    /**
+     * @return 'type_path' of the element type of an array: one step per dimension
+     */
+    protected String elementTypeAnnotationPath(int dimension) {
+        StringBuilder sb = new StringBuilder(typeAnnotationPath);
+
+        for (int i=0; i<dimension; i++) {
+            sb.append("0,0;");
+        }
+
+        return sb.toString();
     }
 
     @Override
@@ -74,17 +166,26 @@ public class TypeVisitor extends AbstractJavaSyntaxVisitor {
 
     @Override
     public void visit(WildcardExtendsTypeArgument argument) {
+        visitTypeAnnotations(typeAnnotationPath);
         tokens.add(TextToken.QUESTIONMARK_SPACE);
         tokens.add(EXTENDS);
         tokens.add(TextToken.SPACE);
 
-        BaseType type = argument.getType();
+        visitWildcardBound(argument.getType());
+    }
 
+    protected void visitWildcardBound(BaseType type) {
+        String path = typeAnnotationPath;
+
+        typeAnnotationPath = path + "2,0;";
         type.accept(this);
+        typeAnnotationPath = path;
     }
 
     @Override
     public void visit(PrimitiveType type) {
+        visitTypeAnnotations(elementTypeAnnotationPath(type.getDimension()));
+
         switch (type.getJavaPrimitiveFlags()) {
             case FLAG_BOOLEAN: tokens.add(BOOLEAN); break;
             case FLAG_CHAR:    tokens.add(CHAR);    break;
@@ -103,6 +204,11 @@ public class TypeVisitor extends AbstractJavaSyntaxVisitor {
 
     @Override
     public void visit(ObjectType type) {
+        String path = typeAnnotationPath;
+        String elementPath = elementTypeAnnotationPath(type.getDimension());
+
+        visitTypeAnnotations(elementPath);
+
         // Build token for type reference
         tokens.add(newTypeReferenceToken(type, currentInternalTypeName));
 
@@ -111,7 +217,9 @@ public class TypeVisitor extends AbstractJavaSyntaxVisitor {
             BaseTypeArgument typeArguments = type.getTypeArguments();
 
             if (typeArguments != null) {
+                typeAnnotationPath = elementPath;
                 visitTypeArgumentList(typeArguments);
+                typeAnnotationPath = path;
             }
         }
 
@@ -121,12 +229,22 @@ public class TypeVisitor extends AbstractJavaSyntaxVisitor {
 
     @Override
     public void visit(InnerObjectType type) {
+        String path = typeAnnotationPath;
+        String elementPath = elementTypeAnnotationPath(type.getDimension());
+
         if ((currentInternalTypeName == null) || (!currentInternalTypeName.equals(type.getInternalName()) && !currentInternalTypeName.equals(type.getOuterType().getInternalName()))) {
             BaseType outerType = type.getOuterType();
+            TypeAnnotationReferences references = typeAnnotationReferences;
 
+            // Annotations of the outer types of non-static inner types ('@A Outer.Inner') are not supported
+            typeAnnotationReferences = null;
             outerType.accept(this);
+            typeAnnotationReferences = references;
             tokens.add(TextToken.DOT);
         }
+
+        // 'Outer.@A Inner'
+        visitTypeAnnotations(elementPath);
 
         // Build token for type reference
         tokens.add(new ReferenceToken(ReferenceToken.TYPE, type.getInternalName(), type.getName(), null, currentInternalTypeName));
@@ -136,7 +254,9 @@ public class TypeVisitor extends AbstractJavaSyntaxVisitor {
             BaseTypeArgument typeArguments = type.getTypeArguments();
 
             if (typeArguments != null) {
+                typeAnnotationPath = elementPath;
                 visitTypeArgumentList(typeArguments);
+                typeAnnotationPath = path;
             }
         }
 
@@ -147,7 +267,17 @@ public class TypeVisitor extends AbstractJavaSyntaxVisitor {
     protected void visitTypeArgumentList(BaseTypeArgument arguments) {
         if (arguments != null) {
             tokens.add(TextToken.LEFTANGLEBRACKET);
-            arguments.accept(this);
+
+            if ((typeAnnotationReferences != null) && !arguments.isTypeArgumentList()) {
+                String path = typeAnnotationPath;
+
+                typeAnnotationPath = path + "3,0;";
+                arguments.accept(this);
+                typeAnnotationPath = path;
+            } else {
+                arguments.accept(this);
+            }
+
             tokens.add(TextToken.RIGHTANGLEBRACKET);
         }
     }
@@ -163,13 +293,12 @@ public class TypeVisitor extends AbstractJavaSyntaxVisitor {
 
     @Override
     public void visit(WildcardSuperTypeArgument argument) {
+        visitTypeAnnotations(typeAnnotationPath);
         tokens.add(TextToken.QUESTIONMARK_SPACE);
         tokens.add(SUPER);
         tokens.add(TextToken.SPACE);
 
-        BaseType type = argument.getType();
-
-        type.accept(this);
+        visitWildcardBound(argument.getType());
     }
 
     @Override
@@ -180,15 +309,21 @@ public class TypeVisitor extends AbstractJavaSyntaxVisitor {
 
     @Override
     public void visit(TypeParameter parameter) {
+        visitTypeAnnotations(typeAnnotationPath);
         tokens.add(newTextToken(parameter.getIdentifier()));
     }
 
     @Override
     public void visit(TypeParameterWithTypeBounds parameter) {
+        visitTypeAnnotations(typeAnnotationPath);
         tokens.add(newTextToken(parameter.getIdentifier()));
         tokens.add(TextToken.SPACE);
         tokens.add(EXTENDS);
         tokens.add(TextToken.SPACE);
+
+        // Annotations of the bounds (targets 0x11 and 0x12) are not supported
+        TypeAnnotationReferences references = typeAnnotationReferences;
+        typeAnnotationReferences = null;
 
         BaseType types = parameter.getTypeBounds();
 
@@ -199,6 +334,8 @@ public class TypeVisitor extends AbstractJavaSyntaxVisitor {
 
             type.accept(this);
         }
+
+        typeAnnotationReferences = references;
     }
 
     @Override
@@ -207,23 +344,31 @@ public class TypeVisitor extends AbstractJavaSyntaxVisitor {
         int size = parameters.size();
 
         if (size > 0) {
+            int index = typeAnnotationIndex;
+
+            typeAnnotationIndex = 0;
             parameters.get(0).accept(this);
 
             for (int i=1; i<size; i++) {
                 tokens.add(TextToken.COMMA_SPACE);
+                typeAnnotationIndex = i;
                 parameters.get(i).accept(this);
             }
+
+            typeAnnotationIndex = index;
         }
     }
 
     @Override
     public void visit(GenericType type) {
+        visitTypeAnnotations(elementTypeAnnotationPath(type.getDimension()));
         tokens.add(newTextToken(type.getName()));
         visitDimension(type.getDimension());
     }
 
     @Override
     public void visit(WildcardTypeArgument type) {
+        visitTypeAnnotations(typeAnnotationPath);
         tokens.add(TextToken.QUESTIONMARK);
     }
 
