@@ -27,6 +27,11 @@ public class ClassFileMethodInvocationExpression extends MethodInvocationExpress
         this.parameterTypes = parameterTypes;
     }
 
+    @Override
+    public boolean isGenericMethod() {
+        return typeParameters != null;
+    }
+
     public BaseTypeParameter getTypeParameters() {
         return typeParameters;
     }

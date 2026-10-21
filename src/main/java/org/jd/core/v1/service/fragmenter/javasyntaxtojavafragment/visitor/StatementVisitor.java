@@ -25,6 +25,7 @@ import org.jd.core.v1.service.fragmenter.javasyntaxtojavafragment.util.UnnamedVa
 import org.jd.core.v1.model.javasyntax.declaration.ExpressionVariableInitializer;
 import org.jd.core.v1.model.javasyntax.declaration.LocalVariableDeclarator;
 import org.jd.core.v1.model.javasyntax.expression.CastExpression;
+import org.jd.core.v1.model.javasyntax.expression.MethodInvocationExpression;
 import org.jd.core.v1.model.javasyntax.expression.NewExpression;
 import org.jd.core.v1.model.javasyntax.type.PrimitiveType;
 
@@ -85,7 +86,7 @@ public class StatementVisitor extends ExpressionVisitor {
 
     /**
      * 'var' declares the type of the initializer: only when it is the declared type, and the initializer does not
-     * need a target type (method invocations are excluded, a generic method would infer other type arguments)
+     * need a target type (generic method invocations are excluded, they would infer other type arguments)
      */
     protected static boolean canUseVar(LocalVariableDeclarationStatement statement) {
         if (!(statement.getLocalVariableDeclarators() instanceof LocalVariableDeclarator)) {
@@ -106,6 +107,11 @@ public class StatementVisitor extends ExpressionVisitor {
 
         if (expression.isNewExpression()) {
             return ((NewExpression)expression).getBodyDeclaration() == null;
+        }
+        if (expression.isMethodInvocationExpression()) {
+            // 'var a = list.get(0)'. Not a generic method: without target type, its type arguments may be inferred
+            // differently ('Collections.emptyList()' would be 'List<Object>')
+            return !((MethodInvocationExpression)expression).isGenericMethod();
         }
 
         if (expression.isCastExpression()) {

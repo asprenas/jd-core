@@ -54,6 +54,9 @@ public class MethodInvocationExpression extends MethodReferenceExpression {
         return 1;
     }
 
+    /** @return true if the invoked method declares type parameters ('<T> List<T> emptyList()'), or if it is unknown */
+    public boolean isGenericMethod() { return true; }
+
     @Override
     public boolean isMethodInvocationExpression() { return true; }
 
