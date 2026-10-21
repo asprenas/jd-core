@@ -3,3 +3,5 @@
 ~ case Circle\(Point\(int \w+, _\), _\)( ->|:)
 ~ case Square\(_, int \w+\)( ->|:)
 - import java.util.Objects;
+~ switch \(o\)
+- Object object = o;
