@@ -439,12 +439,12 @@ public class ByteCodeParser {
                 case 98: // FADD
                     expression2 = stack.pop();
                     expression1 = stack.pop();
-                    stack.push(new BinaryOperatorExpression(lineNumber, TYPE_FLOAT, expression1, "+", expression2, 6));
+                    stack.push(new BinaryOperatorExpression(lineNumber, TYPE_FLOAT, keepFloatingPointOperation(expression1, expression2), "+", expression2, 6));
                     break;
                 case 99: // DADD
                     expression2 = stack.pop();
                     expression1 = stack.pop();
-                    stack.push(new BinaryOperatorExpression(lineNumber, TYPE_DOUBLE, expression1, "+", expression2, 6));
+                    stack.push(new BinaryOperatorExpression(lineNumber, TYPE_DOUBLE, keepFloatingPointOperation(expression1, expression2), "+", expression2, 6));
                     break;
                 case 100: // ISUB
                     expression2 = stack.pop();
@@ -459,12 +459,12 @@ public class ByteCodeParser {
                 case 102: // FSUB
                     expression2 = stack.pop();
                     expression1 = stack.pop();
-                    stack.push(new BinaryOperatorExpression(lineNumber, TYPE_FLOAT, expression1, "-", expression2, 6));
+                    stack.push(new BinaryOperatorExpression(lineNumber, TYPE_FLOAT, keepFloatingPointOperation(expression1, expression2), "-", expression2, 6));
                     break;
                 case 103: // DSUB
                     expression2 = stack.pop();
                     expression1 = stack.pop();
-                    stack.push(new BinaryOperatorExpression(lineNumber, TYPE_DOUBLE, expression1, "-", expression2, 6));
+                    stack.push(new BinaryOperatorExpression(lineNumber, TYPE_DOUBLE, keepFloatingPointOperation(expression1, expression2), "-", expression2, 6));
                     break;
                 case 104: // IMUL
                     expression2 = stack.pop();
@@ -479,12 +479,12 @@ public class ByteCodeParser {
                 case 106: // FMUL
                     expression2 = stack.pop();
                     expression1 = stack.pop();
-                    stack.push(new BinaryOperatorExpression(lineNumber, TYPE_FLOAT, expression1, "*", expression2, 5));
+                    stack.push(new BinaryOperatorExpression(lineNumber, TYPE_FLOAT, keepFloatingPointOperation(expression1, expression2), "*", expression2, 5));
                     break;
                 case 107: // DMUL
                     expression2 = stack.pop();
                     expression1 = stack.pop();
-                    stack.push(new BinaryOperatorExpression(lineNumber, TYPE_DOUBLE, expression1, "*", expression2, 5));
+                    stack.push(new BinaryOperatorExpression(lineNumber, TYPE_DOUBLE, keepFloatingPointOperation(expression1, expression2), "*", expression2, 5));
                     break;
                 case 108: // IDIV
                     expression2 = stack.pop();
@@ -499,12 +499,12 @@ public class ByteCodeParser {
                 case 110: // FDIV
                     expression2 = stack.pop();
                     expression1 = stack.pop();
-                    stack.push(new BinaryOperatorExpression(lineNumber, TYPE_FLOAT, expression1, "/", expression2, 5));
+                    stack.push(new BinaryOperatorExpression(lineNumber, TYPE_FLOAT, keepFloatingPointOperation(expression1, expression2), "/", expression2, 5));
                     break;
                 case 111: // DDIV
                     expression2 = stack.pop();
                     expression1 = stack.pop();
-                    stack.push(new BinaryOperatorExpression(lineNumber, TYPE_DOUBLE, expression1, "/", expression2, 5));
+                    stack.push(new BinaryOperatorExpression(lineNumber, TYPE_DOUBLE, keepFloatingPointOperation(expression1, expression2), "/", expression2, 5));
                     break;
                 case 112: // IREM
                     expression2 = stack.pop();
@@ -519,12 +519,12 @@ public class ByteCodeParser {
                 case 114: // FREM
                     expression2 = stack.pop();
                     expression1 = stack.pop();
-                    stack.push(new BinaryOperatorExpression(lineNumber, TYPE_FLOAT, expression1, "%", expression2, 5));
+                    stack.push(new BinaryOperatorExpression(lineNumber, TYPE_FLOAT, keepFloatingPointOperation(expression1, expression2), "%", expression2, 5));
                     break;
                 case 115: // DREM
                     expression2 = stack.pop();
                     expression1 = stack.pop();
-                    stack.push(new BinaryOperatorExpression(lineNumber, TYPE_DOUBLE, expression1, "%", expression2, 5));
+                    stack.push(new BinaryOperatorExpression(lineNumber, TYPE_DOUBLE, keepFloatingPointOperation(expression1, expression2), "%", expression2, 5));
                     break;
                 case 116: case 117: case 118: case 119: // INEG, LNEG, FNEG, DNEG
                     stack.push(newPreArithmeticOperatorExpression(lineNumber, "-", stack.pop()));
@@ -2271,6 +2271,25 @@ public class ByteCodeParser {
         }
 
         return methodTypes;
+    }
+
+    protected static Expression keepFloatingPointOperation(Expression expression1, Expression expression2) {
+        // '(double)i / l': if both operands are implicit widenings of integral values, the source would compute an
+        // integral operation => set the left cast as explicit
+        if (isImplicitIntegralWidening(expression1) && isImplicitIntegralWidening(expression2)) {
+            ((CastExpression)expression1).setExplicit(true);
+        }
+
+        return expression1;
+    }
+
+    private static boolean isImplicitIntegralWidening(Expression expression) {
+        if (expression.isCastExpression() && !((CastExpression)expression).isExplicit()) {
+            Type type = expression.getExpression().getType();
+            return type.isPrimitiveType() && (type != TYPE_FLOAT) && (type != TYPE_DOUBLE) && (type != TYPE_BOOLEAN);
+        }
+
+        return false;
     }
 
     protected static Expression forceExplicitCastExpression(Expression expression) {

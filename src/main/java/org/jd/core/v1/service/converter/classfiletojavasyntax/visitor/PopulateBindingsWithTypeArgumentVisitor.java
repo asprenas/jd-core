@@ -56,6 +56,12 @@ public class PopulateBindingsWithTypeArgumentVisitor implements TypeArgumentVisi
             TypeArgument typeArgument = bindings.get(typeName);
 
             if (current != null) {
+                if (current.isWildcardSuperTypeArgument()) {
+                    // 'Collector<? super String, ...>' expected for 'Collector<T, ?, List<T>>': infer 'T' as 'String',
+                    // otherwise the bound leaks into 'List<? super String>'
+                    current = current.getType();
+                }
+
                 if (current.isGenericTypeArgument() && !equals(contextualTypeBounds.get(typeName), typeBounds.get(((GenericType)current).getName()))) {
                     return; // Incompatible bounds
                 }
