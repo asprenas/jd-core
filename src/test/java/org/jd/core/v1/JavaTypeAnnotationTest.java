@@ -111,6 +111,42 @@ public class JavaTypeAnnotationTest {
             new JavaSourceFileObject("p/Body", source)), "the decompiled source does not recompile");
     }
 
+    /** Remaining item C5: non-static inner types ('type_path' kind 1) */
+    @Test
+    public void nonStaticInnerType() throws Exception {
+        Map<String, String> sources = new LinkedHashMap<>();
+        sources.put("p/A",
+            "package p;\n" +
+            "import java.lang.annotation.*;\n" +
+            "@Retention(RetentionPolicy.RUNTIME) @Target(ElementType.TYPE_USE) public @interface A {}\n");
+        sources.put("p/B",
+            "package p;\n" +
+            "import java.lang.annotation.*;\n" +
+            "@Retention(RetentionPolicy.RUNTIME) @Target(ElementType.TYPE_USE) public @interface B {}\n");
+        sources.put("p/Outer",
+            "package p;\n" +
+            "public class Outer {\n" +
+            "    public class Inner {}\n" +
+            "}\n");
+        sources.put("p/User",
+            "package p;\n" +
+            "public class User {\n" +
+            "    Outer.@A Inner inner;\n" +
+            "    @B Outer.@A Inner both;\n" +
+            "}\n");
+
+        InMemorySample sample = new InMemorySample(sources, "-g", "--release", "11");
+        String source = sample.decompile("p/User", Collections.emptyMap());
+
+        assertTrue(source.contains("Outer.@A Inner inner;"), "inner type");
+        assertTrue(source.contains("@B Outer.@A Inner both;"), "outer and inner types");
+        assertTrue(CompilerUtil.compile("11",
+            new JavaSourceFileObject("p/A", sources.get("p/A")),
+            new JavaSourceFileObject("p/B", sources.get("p/B")),
+            new JavaSourceFileObject("p/Outer", sources.get("p/Outer")),
+            new JavaSourceFileObject("p/User", source)), "the decompiled source does not recompile");
+    }
+
     /** Remaining item C4: receiver parameters (0x15) */
     @Test
     public void receiverParameter() throws Exception {
