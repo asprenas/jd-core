@@ -29,6 +29,8 @@ public class SearchImportsVisitor extends AbstractJavaSyntaxVisitor {
     protected String internalPackagePrefix;
     protected ImportsFragment importsFragment = JavaFragmentFactory.newImportsFragment();
     protected int maxLineNumber = 0;
+    // In a not printed declaration: only the line numbers are searched
+    protected boolean hidden;
     protected HashSet<String> localTypeNames = new HashSet<>();
     protected HashSet<String> internalTypeNames = new HashSet<>();
     protected HashSet<String> importTypeNames = new HashSet<>();
@@ -75,20 +77,37 @@ public class SearchImportsVisitor extends AbstractJavaSyntaxVisitor {
 
     @Override
     public void visit(FieldDeclaration declaration) {
+        boolean oldHidden = hidden;
+
+        hidden |= isHidden(declaration.getFlags());
         super.visit(declaration);
         acceptTypeAnnotations(declaration.getTypeAnnotationReferences());
+        hidden = oldHidden;
     }
 
     @Override
     public void visit(ConstructorDeclaration declaration) {
+        boolean oldHidden = hidden;
+
+        hidden |= isHidden(declaration.getFlags());
         super.visit(declaration);
         acceptTypeAnnotations(declaration.getTypeAnnotationReferences());
+        hidden = oldHidden;
     }
 
     @Override
     public void visit(MethodDeclaration declaration) {
+        boolean oldHidden = hidden;
+
+        hidden |= isHidden(declaration.getFlags());
         super.visit(declaration);
         acceptTypeAnnotations(declaration.getTypeAnnotationReferences());
+        hidden = oldHidden;
+    }
+
+    /** Not printed declarations: their types do not need imports ('Objects' of the hidden record 'equals') */
+    protected static boolean isHidden(int flags) {
+        return (flags & Declaration.FLAG_SYNTHETIC) != 0;
     }
 
     protected void acceptTypeAnnotations(TypeAnnotationReferences typeAnnotationReferences) {
@@ -341,6 +360,10 @@ public class SearchImportsVisitor extends AbstractJavaSyntaxVisitor {
     }
 
     protected void add(ObjectType type) {
+        if (hidden) {
+            return;
+        }
+
         String descriptor = type.getDescriptor();
 
         if (descriptor.charAt(descriptor.length()-1) == ';') {

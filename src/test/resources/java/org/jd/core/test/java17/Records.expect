@@ -2,3 +2,4 @@
 ~ record Point\(int x, int y\)
 ~ record Pair<A, B>\(A first, B second\)
 - extends Record
+- import java.util.Objects;
