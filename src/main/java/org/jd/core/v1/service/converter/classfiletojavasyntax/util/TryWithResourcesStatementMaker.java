@@ -324,7 +324,9 @@ public class TryWithResourcesStatementMaker {
             resources.add(new TryStatement.Resource(null, null, expression));
         } else {
             resource.setDeclared(true);
-            resources.add(new TryStatement.Resource((ObjectType)resource.getType(), resource.getName(), expression));
+            TryStatement.Resource r = new TryStatement.Resource((ObjectType)resource.getType(), resource.getName(), expression);
+            r.setTypeAnnotationReferences(resource.getTypeAnnotationReferences());
+            resources.add(r);
         }
 
         return new ClassFileTryStatement(resources, tryStatements, null, null, false, false);
@@ -490,7 +492,9 @@ public class TryWithResourcesStatementMaker {
         // Create try-with-resources statement
         DefaultList<TryStatement.Resource> resources = new DefaultList<>();
 
-        resources.add(new TryStatement.Resource((ObjectType) lv1.getType(), lv1.getName(), boe.getRightExpression()));
+        TryStatement.Resource resource = new TryStatement.Resource((ObjectType) lv1.getType(), lv1.getName(), boe.getRightExpression());
+        resource.setTypeAnnotationReferences(lv1.getTypeAnnotationReferences());
+        resources.add(resource);
 
         return new ClassFileTryStatement(resources, tryStatements, null, finallyStatements, false, false);
     }

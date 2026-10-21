@@ -7,6 +7,7 @@
 
 package org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.statement;
 
+import org.jd.core.v1.model.javasyntax.reference.TypeAnnotationReferences;
 import org.jd.core.v1.model.javasyntax.statement.BaseStatement;
 import org.jd.core.v1.model.javasyntax.statement.TryStatement;
 import org.jd.core.v1.model.javasyntax.type.ObjectType;
@@ -53,6 +54,11 @@ public class ClassFileTryStatement extends TryStatement {
         public CatchClause(int lineNumber, ObjectType type, AbstractLocalVariable localVariable, BaseStatement statements) {
             super(lineNumber, type, null, statements);
             this.localVariable = localVariable;
+        }
+
+        @Override
+        public TypeAnnotationReferences getTypeAnnotationReferences() {
+            return localVariable.getTypeAnnotationReferences();
         }
 
         public AbstractLocalVariable getLocalVariable() {

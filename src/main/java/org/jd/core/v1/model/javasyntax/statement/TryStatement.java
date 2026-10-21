@@ -7,6 +7,7 @@
 
 package org.jd.core.v1.model.javasyntax.statement;
 
+import org.jd.core.v1.model.javasyntax.reference.TypeAnnotationReferences;
 import org.jd.core.v1.model.javasyntax.expression.Expression;
 import org.jd.core.v1.model.javasyntax.type.ObjectType;
 import org.jd.core.v1.util.DefaultList;
@@ -62,6 +63,7 @@ public class TryStatement implements Statement {
         protected ObjectType type;
         protected String name;
         protected Expression expression;
+        protected TypeAnnotationReferences typeAnnotationReferences; // '@A Reader r = ...', or null
 
         /**
          * @param type null for a Java 9+ resource without declaration, 'try (reader)'
@@ -88,6 +90,14 @@ public class TryStatement implements Statement {
 
         public void setExpression(Expression expression) {
             this.expression = expression;
+        }
+
+        public TypeAnnotationReferences getTypeAnnotationReferences() {
+            return typeAnnotationReferences;
+        }
+
+        public void setTypeAnnotationReferences(TypeAnnotationReferences typeAnnotationReferences) {
+            this.typeAnnotationReferences = typeAnnotationReferences;
         }
 
         @Override
@@ -117,6 +127,11 @@ public class TryStatement implements Statement {
 
         public ObjectType getType() {
             return type;
+        }
+
+        /** Type annotations of the exception parameter ('catch (@A IOException e)'), or null */
+        public TypeAnnotationReferences getTypeAnnotationReferences() {
+            return null;
         }
 
         public DefaultList<ObjectType> getOtherTypes() {

@@ -827,7 +827,8 @@ public class StatementVisitor extends ExpressionVisitor {
             return;
         }
 
-        type.accept(this);
+        // '@A Reader r = ...'
+        visitAnnotatedType(type, resource.getTypeAnnotationReferences(), TypeAnnotationReferences.LOCAL_VARIABLE, -1, "");
         tokens.add(TextToken.SPACE);
         // Java 22+: 'try (var _ = ...)'
         tokens.add(newTextToken((resource.getName() == null) ? "_" : resource.getName()));
@@ -849,7 +850,8 @@ public class StatementVisitor extends ExpressionVisitor {
                 tokens = new Tokens();
                 tokens.add(CATCH);
                 tokens.add(TextToken.SPACE_LEFTROUNDBRACKET);
-                type.accept(this);
+                // 'catch (@A IOException e)'
+                visitAnnotatedType(type, cc.getTypeAnnotationReferences(), TypeAnnotationReferences.LOCAL_VARIABLE, -1, "");
 
                 if (cc.getOtherTypes() != null) {
                     for (BaseType otherType : cc.getOtherTypes()) {
