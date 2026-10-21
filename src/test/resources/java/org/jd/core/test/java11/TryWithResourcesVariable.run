@@ -1,0 +1,9 @@
+# Phase 4-4: the resources are closed once, also when the body throws
+with(reader:r) oneVariable reader:abc
+with(reader:r) oneVariable reader:
+with(reader:r) twoVariables in:abc out:
+with(reader:r) mixed in:abc does-not-exist/dir/file
+with(reader:r) withCatchAndFinally reader:xyz
+with(reader:abc) finalField
+with(reader:abc) thisField
+with(reader:) finalField

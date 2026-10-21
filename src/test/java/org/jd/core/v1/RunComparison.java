@@ -28,6 +28,7 @@ import java.util.function.Supplier;
  *   methodName arg1 arg2 ...        method of the sample class
  *   Nested.methodName arg1 ...      method of a nested class of the sample ('A.B.m' for deeper classes)
  *   new Nested arg1 ...             constructor of a nested class, the result is the new instance
+ *   with(arg1,arg2) methodName ...  instance method called on 'new Sample(arg1, arg2)' (no blank inside 'with(...)')
  *
  * Arguments are separated by blanks and converted to the parameter types of the only method (or constructor)
  * with that name and argument count:
@@ -37,6 +38,8 @@ import java.util.function.Supplier;
  *   <li>"list:a|b|int:3": an ArrayList, each element converted like an Object argument ("list:" is empty)</li>
  *   <li>"Point(1,2)": a new instance of the nested class Point of the sample, arguments converted recursively
  *       (no blank inside). "Line(Point(0,0),Point(1,1))" nests</li>
+ *   <li>"reader:abc", "in:abc", "out:": a Reader, an InputStream reading "abc", an OutputStream. Closing them prints
+ *       "[closed]" ("[closed out:written text]"), the printed text is compared: the resources must be closed once</li>
  * </ul>
  * Instance methods are called on a new instance (no-argument constructor).
  * Results are compared with String.valueOf, thrown exceptions by class name. A returned Supplier is called and
@@ -118,6 +121,12 @@ public final class RunComparison {
 
     private static String invokeCall(Class<?> sample, String call) {
         String[] parts = call.split("\\s+");
+        String[] constructorValues = null;
+
+        if (parts[0].startsWith("with(") && parts[0].endsWith(")")) {
+            constructorValues = splitArguments(parts[0].substring(5, parts[0].length() - 1));
+            parts = copyOfRange(parts, 1);
+        }
 
         try {
             if (parts[0].equals("new")) {
@@ -142,9 +151,13 @@ public final class RunComparison {
             Object target = null;
 
             if (!Modifier.isStatic(method.getModifiers())) {
-                Constructor<?> constructor = type.getDeclaredConstructor();
-                constructor.setAccessible(true);
-                target = constructor.newInstance();
+                if (constructorValues == null) {
+                    Constructor<?> constructor = type.getDeclaredConstructor();
+                    constructor.setAccessible(true);
+                    target = constructor.newInstance();
+                } else {
+                    target = newInstance(sample, (Constructor<?>)find(type.getDeclaredConstructors(), null, constructorValues.length), constructorValues);
+                }
             }
 
             method.setAccessible(true);
@@ -326,10 +339,33 @@ public final class RunComparison {
                 // A string
             }
         }
+        if (value.startsWith("reader:") && type.isAssignableFrom(ClosingReader.class)) {
+            return new ClosingReader(value.substring(7));
+        }
+        if (value.startsWith("in:") && type.isAssignableFrom(ClosingInputStream.class)) {
+            return new ClosingInputStream(value.substring(3));
+        }
+        if (value.equals("out:") && type.isAssignableFrom(ClosingOutputStream.class)) {
+            return new ClosingOutputStream();
+        }
         if (value.equals("\"\"")) {
             return "";
         }
         return value;
+    }
+
+    private static final class ClosingReader extends java.io.StringReader {
+        ClosingReader(String text) { super(text); }
+        @Override public void close() { System.out.print("[closed]"); super.close(); }
+    }
+
+    private static final class ClosingInputStream extends java.io.ByteArrayInputStream {
+        ClosingInputStream(String text) { super(text.getBytes(StandardCharsets.UTF_8)); }
+        @Override public void close() throws java.io.IOException { System.out.print("[closed]"); super.close(); }
+    }
+
+    private static final class ClosingOutputStream extends java.io.ByteArrayOutputStream {
+        @Override public void close() throws java.io.IOException { System.out.print("[closed out:" + toString() + "]"); super.close(); }
     }
 
     /** "1,Point(2,3),x" -> {"1", "Point(2,3)", "x"} */
