@@ -26,3 +26,8 @@
 # statement switches stay statements
 + result = "start";
 ~ switch \(day\)
+# Phase 4-2: arrow labels
++ case MONDAY, FRIDAY, SUNDAY -> 6;
++ case 2, 3 -> System.out.println("few");
++ default -> throw new IllegalArgumentException(s);
+- break;

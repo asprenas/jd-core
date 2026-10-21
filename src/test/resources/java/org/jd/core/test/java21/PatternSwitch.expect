@@ -1,8 +1,8 @@
 # Phase 3: pattern labels and guards
-+ case Integer i:
-+ case null:
-~ case null:\s*(/\*.*\*/)?\s*default:
-+ case Circle c:
+~ case Integer i( ->|:)
+~ case null(,| ->|:)
+~ case null(:\s*(/\*.*\*/)?\s*|, )default( ->|:)
+~ case Circle c( ->|:)
 - MatchException
-~ case String \w+ when \w+\.isEmpty\(\):
-~ case Color \w+ when \w+ == Color\.RED:
+~ case String \w+ when \w+\.isEmpty\(\)( ->|:)
+~ case Color \w+ when \w+ == Color\.RED( ->|:)

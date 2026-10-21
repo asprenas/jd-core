@@ -2,8 +2,8 @@
 - typeSwitch
 - enumSwitch
 - instanceof
-+ case Integer i:
-+ case null:
-+ case "bb":
-+ case Coin.HEADS:
-+ case Coin x:
+~ case Integer i( ->|:)
+~ case null(,| ->|:)
+~ case "bb"( ->|:)
+~ case Coin\.HEADS( ->|:)
+~ case Coin x( ->|:)

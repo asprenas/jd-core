@@ -18,8 +18,10 @@ import org.jd.core.v1.model.javasyntax.expression.SwitchExpression;
 import org.jd.core.v1.model.javasyntax.statement.*;
 import org.jd.core.v1.model.javasyntax.type.BaseType;
 import org.jd.core.v1.model.token.*;
+import org.jd.core.v1.service.fragmenter.javasyntaxtojavafragment.util.ArrowSwitchUtil;
 import org.jd.core.v1.service.fragmenter.javasyntaxtojavafragment.util.JavaFragmentFactory;
 
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.StringTokenizer;
@@ -50,8 +52,13 @@ public class StatementVisitor extends ExpressionVisitor {
     public static final KeywordToken VOLATILE = new KeywordToken("volatile");
     public static final KeywordToken WHILE = new KeywordToken("while");
 
+    public static final TextToken SPACE_ARROW = new TextToken(" ->");
+
+    protected boolean arrowSwitchSupported;
+
     public StatementVisitor(Loader loader, String mainInternalTypeName, int majorVersion, ImportsFragment importsFragment) {
         super(loader, mainInternalTypeName, majorVersion, importsFragment);
+        this.arrowSwitchSupported = (majorVersion >= ArrowSwitchUtil.JAVA_14);
     }
 
     @Override
@@ -444,18 +451,9 @@ public class StatementVisitor extends ExpressionVisitor {
         fragments.addTokensFragment(tokens);
 
         StartBlockFragment start = JavaFragmentFactory.addStartStatementsInLambdaBlock(fragments);
-        Iterator<SwitchStatement.Block> iterator = statement.getBlocks().iterator();
 
         tokens = new Tokens();
-
-        if (iterator.hasNext()) {
-            iterator.next().accept(this);
-
-            while (iterator.hasNext()) {
-                JavaFragmentFactory.addSpacerBetweenSwitchLabelBlock(fragments);
-                iterator.next().accept(this);
-            }
-        }
+        visitSwitchBlocks(statement, true);
 
         if (inExpressionFlag) {
             JavaFragmentFactory.addEndStatementsInLambdaBlockInParameter(fragments, start);
@@ -501,19 +499,104 @@ public class StatementVisitor extends ExpressionVisitor {
 
         StartStatementsBlockFragment.Group group = JavaFragmentFactory.addStartStatementsBlock(fragments);
 
-        Iterator<SwitchStatement.Block> iterator = statement.getBlocks().iterator();
-
-        if (iterator.hasNext()) {
-            iterator.next().accept(this);
-
-            while (iterator.hasNext()) {
-                JavaFragmentFactory.addSpacerBetweenSwitchLabelBlock(fragments);
-                iterator.next().accept(this);
-            }
-        }
+        visitSwitchBlocks(statement, false);
 
         JavaFragmentFactory.addEndStatementsBlock(fragments, group);
         JavaFragmentFactory.addSpacerAfterEndStatementsBlock(fragments);
+    }
+
+    protected void visitSwitchBlocks(SwitchStatement statement, boolean expression) {
+        boolean arrows = arrowSwitchSupported && ArrowSwitchUtil.canUseArrows(statement, expression);
+        Iterator<SwitchStatement.Block> iterator = statement.getBlocks().iterator();
+
+        while (iterator.hasNext()) {
+            SwitchStatement.Block block = iterator.next();
+
+            if (arrows) {
+                visitArrowBlock(block, expression);
+            } else {
+                block.accept(this);
+            }
+
+            if (iterator.hasNext()) {
+                JavaFragmentFactory.addSpacerBetweenSwitchLabelBlock(fragments);
+            }
+        }
+    }
+
+    /** 'case 1, 2 -> expression;', 'case 3 -> throw ...;', 'case 4 -> statement;' or 'default -> { ... }' */
+    protected void visitArrowBlock(SwitchStatement.Block block, boolean expression) {
+        int savedMaxLineNumber = maxLineNumber;
+
+        tokens = new Tokens();
+
+        List<SwitchStatement.Label> labels = (block instanceof SwitchStatement.MultiLabelsBlock) ?
+            ((SwitchStatement.MultiLabelsBlock)block).getLabels() :
+            Collections.singletonList(((SwitchStatement.LabelBlock)block).getLabel());
+
+        if (labels.get(0) == SwitchStatement.DEFAULT_LABEL) {
+            tokens.add(DEFAULT);
+        } else {
+            tokens.add(CASE);
+            tokens.add(TextToken.SPACE);
+
+            for (int i = 0, size = labels.size(); i < size; i++) {
+                if (i > 0) {
+                    tokens.add(TextToken.COMMA_SPACE);
+                }
+                if (labels.get(i) == SwitchStatement.DEFAULT_LABEL) {
+                    // 'case null, default'
+                    tokens.add(DEFAULT);
+                } else {
+                    SwitchStatement.ExpressionLabel label = (SwitchStatement.ExpressionLabel)labels.get(i);
+
+                    label.getExpression().accept(this);
+
+                    if (label.getGuard() != null) {
+                        tokens.add(TextToken.SPACE);
+                        tokens.add(WHEN);
+                        tokens.add(TextToken.SPACE);
+                        label.getGuard().accept(this);
+                    }
+                }
+            }
+        }
+
+        // The label and its body are on one line: the line of the body, not the line of the label constants
+        // (javac gives them the line of 'switch')
+        tokens.removeIf(token -> token instanceof LineNumberToken);
+        tokens.currentLineNumber = UNKNOWN_LINE_NUMBER;
+        maxLineNumber = savedMaxLineNumber;
+        tokens.add(TextToken.SPACE_ARROW_SPACE);
+
+        BaseStatement statements = ArrowSwitchUtil.getArrowStatements(block);
+
+        if (statements == null) {
+            tokens.add(TextToken.LEFTRIGHTCURLYBRACKETS);
+            fragments.addTokensFragment(tokens);
+        } else if ((statements.size() == 1) && expression && statements.getFirst().isYieldStatement()) {
+            // 'case 1 -> value;'
+            YieldStatement yield = (YieldStatement)statements.getFirst();
+
+            tokens.addLineNumberToken(yield.getLineNumber());
+            yield.getExpression().accept(this);
+            tokens.add(TextToken.SEMICOLON);
+            fragments.addTokensFragment(tokens);
+        } else if ((statements.size() == 1) && (statements.getFirst().isThrowStatement() || statements.getFirst().isExpressionStatement())) {
+            // 'case 1 -> throw ...;' or 'case 1 -> System.out.println();'
+            fragments.addTokensFragment(tokens);
+            statements.getFirst().accept(this);
+        } else {
+            // The block adds ' {'
+            tokens.remove(tokens.size() - 1);
+            tokens.add(SPACE_ARROW);
+            fragments.addTokensFragment(tokens);
+            StartStatementsBlockFragment.Group group = JavaFragmentFactory.addStartStatementsBlock(fragments);
+            statements.accept(this);
+            JavaFragmentFactory.addEndStatementsBlock(fragments, group);
+        }
+
+        tokens = new Tokens();
     }
 
     @Override
