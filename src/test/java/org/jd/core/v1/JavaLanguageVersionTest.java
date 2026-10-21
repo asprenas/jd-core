@@ -119,7 +119,7 @@ public class JavaLanguageVersionTest {
 
         // 2. Recompilation, 3. same results as the original class
         if (!fallback) {
-            if (runtimeFeatureVersion() < version) {
+            if (Runtime.version().feature() < version) {
                 // Not a pass: the recompilation check cannot run on an older JDK, report the test as skipped.
                 assumeTrue(!problems.isEmpty(), internalName + ": recompilation needs a JDK " + version + "+");
             } else {
@@ -151,7 +151,7 @@ public class JavaLanguageVersionTest {
     @ValueSource(strings = {"", "-javac" + NEWEST_JDK})
     public void textBlocksConfiguration(String variant) throws Exception {
         assumeTrue(parseSelection(System.getenv("JDCORE_SAMPLES")).contains(17), "java17 samples not selected");
-        assumeTrue(runtimeFeatureVersion() >= 17, "recompilation needs a JDK 17+");
+        assumeTrue(Runtime.version().feature() >= 17, "recompilation needs a JDK 17+");
 
         String internalName = "org/jd/core/test/java17/TextBlocks";
         Loader loader = loader("/zip/data-java-language-17" + variant + ".zip");
@@ -174,7 +174,7 @@ public class JavaLanguageVersionTest {
     @Test
     public void unnamedVariablesConfiguration() throws Exception {
         assumeTrue(parseSelection(System.getenv("JDCORE_SAMPLES")).contains(25), "java25 samples not selected");
-        assumeTrue(runtimeFeatureVersion() >= 25, "recompilation needs a JDK 25+");
+        assumeTrue(Runtime.version().feature() >= 25, "recompilation needs a JDK 25+");
 
         String internalName = "org/jd/core/test/java25/UnnamedVariables";
         Loader loader = loader("/zip/data-java-language-25.zip");
@@ -200,7 +200,7 @@ public class JavaLanguageVersionTest {
     @ValueSource(strings = {"", "-javac" + NEWEST_JDK})
     public void varConfiguration(String variant) throws Exception {
         assumeTrue(parseSelection(System.getenv("JDCORE_SAMPLES")).contains(11), "java11 samples not selected");
-        assumeTrue(runtimeFeatureVersion() >= 11, "recompilation needs a JDK 11+");
+        assumeTrue(Runtime.version().feature() >= 11, "recompilation needs a JDK 11+");
 
         String internalName = "org/jd/core/test/java11/LocalVariableTypeInference";
         Loader loader = loader("/zip/data-java-language-11" + variant + ".zip");
@@ -305,22 +305,6 @@ public class JavaLanguageVersionTest {
 
     private static String expectResource(int version, String internalName) {
         return "/java/org/jd/core/test/java" + version + "/" + internalName.substring(internalName.lastIndexOf('/') + 1) + ".expect";
-    }
-
-    private static int runtimeFeatureVersion() {
-        String javaVersion = System.getProperty("java.version");
-
-        if (javaVersion.startsWith("1.")) {
-            return Integer.parseInt(javaVersion.substring(2, 3));
-        }
-
-        int end = 0;
-
-        while (end < javaVersion.length() && Character.isDigit(javaVersion.charAt(end))) {
-            end++;
-        }
-
-        return Integer.parseInt(javaVersion.substring(0, end));
     }
 
     private static synchronized ZipLoader loader(String resource) throws Exception {

@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 public class JavaFlexibleConstructorCaptureTest {
     @Test
     public void localClassCapture() throws Exception {
-        assumeTrue(InMemorySample.runtimeFeatureVersion() >= 25, "flexible constructor bodies need a JDK 25+");
+        assumeTrue(Runtime.version().feature() >= 25, "flexible constructor bodies need a JDK 25+");
 
         String source =
             "package p;\n" +

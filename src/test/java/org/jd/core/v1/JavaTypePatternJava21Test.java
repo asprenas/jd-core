@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 public class JavaTypePatternJava21Test {
     @Test
     public void unusedBindings() throws Exception {
-        assumeTrue(InMemorySample.runtimeFeatureVersion() >= 21, "pattern switch needs a JDK 21+");
+        assumeTrue(Runtime.version().feature() >= 21, "pattern switch needs a JDK 21+");
 
         String source =
             "package p;\n" +
