@@ -371,6 +371,19 @@ public class Java5TypeParametersToTypeArgumentsBinder extends AbstractTypeParame
             BaseType parameterTypes = mie.getParameterTypes();
             BaseExpression parameters = mie.getParameters();
             Expression exp = mie.getExpression();
+
+            if (exp.isMethodInvocationExpression() && !((ClassFileMethodInvocationExpression)exp).isBound() &&
+                    (((ClassFileMethodInvocationExpression)exp).getTypeParameters() == null)) {
+                // A receiver is a standalone expression (JLS 15.12): its type does not depend on this invocation.
+                // Bound first, 'stream()' of 'list.stream().filter(...)' gives 'Stream<String>' to bind 'filter'.
+                // Not the generic methods ('FluentIterable.<V>of(values).transform(...)'): their type arguments
+                // are still inferred with the expected type
+                Type t = this.type;
+                this.type = TYPE_OBJECT;
+                exp.accept(this);
+                this.type = t;
+            }
+
             Type expressionType = exp.getType();
 
             if (staticMethod || (mie.getTypeParameters() != null) || !mie.getInternalTypeName().equals(internalTypeName)) {

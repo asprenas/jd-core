@@ -393,6 +393,9 @@ public class AddCastExpressionVisitor extends AbstractJavaSyntaxVisitor {
                                 ne.setObjectType(ne.getObjectType().createType(null));
                             }
                             expression = addCastExpression(objectType, expression);
+                        } else if (isRawTypeAssignableGenericMethodInvocation(objectType, expressionObjectType, expression)) {
+                            // 'collect(Collectors.toList())': the type arguments of a generic method are inferred from
+                            // the parameter type (target typing), a raw cast would hide them
                         } else if (!ObjectType.TYPE_OBJECT.equals(type) && !typeMaker.isAssignable(typeBounds, objectType, expressionObjectType)) {
                             BaseTypeArgument ta1 = objectType.getTypeArguments();
                             BaseTypeArgument ta2 = expressionObjectType.getTypeArguments();
@@ -436,6 +439,12 @@ public class AddCastExpressionVisitor extends AbstractJavaSyntaxVisitor {
         }
 
         return expression;
+    }
+
+    /** An invocation of a generic method whose raw type fits: only its type arguments differ */
+    private boolean isRawTypeAssignableGenericMethodInvocation(ObjectType type, ObjectType expressionType, Expression expression) {
+        return expression.isMethodInvocationExpression() && (((ClassFileMethodInvocationExpression)expression).getTypeParameters() != null) &&
+               (type.getTypeArguments() != null) && typeMaker.isRawTypeAssignable(type, expressionType);
     }
 
     private Expression addCastExpression(Type type, Expression expression) {
