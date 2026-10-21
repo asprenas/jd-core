@@ -110,4 +110,34 @@ public class JavaTypeAnnotationTest {
             new JavaSourceFileObject("p/A", sources.get("p/A")),
             new JavaSourceFileObject("p/Body", source)), "the decompiled source does not recompile");
     }
+
+    /** Remaining item C3: constructor (0x45) and method (0x46) references */
+    @Test
+    public void methodReferences() throws Exception {
+        Map<String, String> sources = new LinkedHashMap<>();
+        sources.put("p/A",
+            "package p;\n" +
+            "import java.lang.annotation.*;\n" +
+            "@Retention(RetentionPolicy.RUNTIME) @Target(ElementType.TYPE_USE) public @interface A {}\n");
+        sources.put("p/Refs",
+            "package p;\n" +
+            "import java.util.function.*;\n" +
+            "public class Refs {\n" +
+            "    public Supplier<Object> supplier() {\n" +
+            "        return @A StringBuilder::new;\n" +
+            "    }\n" +
+            "    public Function<Object, String> function() {\n" +
+            "        return @A String::valueOf;\n" +
+            "    }\n" +
+            "}\n");
+
+        InMemorySample sample = new InMemorySample(sources, "-g", "--release", "11");
+        String source = sample.decompile("p/Refs", Collections.emptyMap());
+
+        assertTrue(source.contains("@A StringBuilder::new"), "constructor reference");
+        assertTrue(source.contains("@A String::valueOf"), "method reference");
+        assertTrue(CompilerUtil.compile("11",
+            new JavaSourceFileObject("p/A", sources.get("p/A")),
+            new JavaSourceFileObject("p/Refs", source)), "the decompiled source does not recompile");
+    }
 }

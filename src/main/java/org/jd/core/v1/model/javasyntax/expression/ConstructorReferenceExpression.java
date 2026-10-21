@@ -7,10 +7,12 @@
 
 package org.jd.core.v1.model.javasyntax.expression;
 
+import org.jd.core.v1.model.javasyntax.reference.TypeAnnotationReferences;
 import org.jd.core.v1.model.javasyntax.type.ObjectType;
 import org.jd.core.v1.model.javasyntax.type.Type;
 
 public class ConstructorReferenceExpression extends AbstractLineNumberTypeExpression {
+    protected TypeAnnotationReferences typeAnnotationReferences;
     protected ObjectType objectType;
     protected String descriptor;
 
@@ -34,6 +36,14 @@ public class ConstructorReferenceExpression extends AbstractLineNumberTypeExpres
     @Override
     public String getDescriptor() {
         return descriptor;
+    }
+
+    public TypeAnnotationReferences getTypeAnnotationReferences() {
+        return typeAnnotationReferences;
+    }
+
+    public void setTypeAnnotationReferences(TypeAnnotationReferences typeAnnotationReferences) {
+        this.typeAnnotationReferences = typeAnnotationReferences;
     }
 
     @Override

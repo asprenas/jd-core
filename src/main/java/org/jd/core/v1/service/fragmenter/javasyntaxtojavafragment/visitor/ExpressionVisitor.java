@@ -199,7 +199,12 @@ public class ExpressionVisitor extends TypeVisitor {
         ObjectType ot = expression.getObjectType();
 
         tokens.addLineNumberToken(expression);
-        tokens.add(newTypeReferenceToken(ot, currentInternalTypeName));
+        if (expression.getTypeAnnotationReferences() == null) {
+            tokens.add(newTypeReferenceToken(ot, currentInternalTypeName));
+        } else {
+            // '@A Foo::new'
+            visitAnnotatedType(ot, expression.getTypeAnnotationReferences(), TypeAnnotationReferences.CONSTRUCTOR_REFERENCE, 0, "");
+        }
         tokens.add(TextToken.COLON_COLON);
         //tokens.add(new ReferenceToken(ReferenceToken.CONSTRUCTOR, ot.getInternalName(), "new", expression.getDescriptor(), currentInternalTypeName));
         tokens.add(NEW);
@@ -516,7 +521,15 @@ public class ExpressionVisitor extends TypeVisitor {
 
     @Override
     public void visit(MethodReferenceExpression expression) {
-        expression.getExpression().accept(this);
+        Expression reference = expression.getExpression();
+
+        if ((expression.getTypeAnnotationReferences() != null) && reference.isObjectTypeReferenceExpression()) {
+            // '@A Foo::m'
+            tokens.addLineNumberToken(reference);
+            visitAnnotatedType(reference.getType(), expression.getTypeAnnotationReferences(), TypeAnnotationReferences.METHOD_REFERENCE, 0, "");
+        } else {
+            reference.accept(this);
+        }
         tokens.addLineNumberToken(expression);
         tokens.add(TextToken.COLON_COLON);
         tokens.add(new ReferenceToken(ReferenceToken.METHOD, expression.getInternalTypeName(), expression.getName(), expression.getDescriptor(), currentInternalTypeName));

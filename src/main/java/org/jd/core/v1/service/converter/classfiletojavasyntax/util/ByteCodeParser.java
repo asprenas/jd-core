@@ -184,7 +184,7 @@ public class ByteCodeParser {
                     for (TypeAnnotation ta : attribute.getTypeAnnotations()) {
                         int targetType = ta.getTargetType();
 
-                        if ((targetType == TypeAnnotationReferences.INSTANCEOF) || (targetType == TypeAnnotationReferences.NEW)) {
+                        if ((targetType >= TypeAnnotationReferences.INSTANCEOF) && (targetType <= TypeAnnotationReferences.METHOD_REFERENCE)) {
                             if (map == null) {
                                 map = new HashMap<>();
                             }
@@ -931,8 +931,9 @@ public class ByteCodeParser {
                     }
                     break;
                 case 186: // INVOKEDYNAMIC
+                    references = (instructionTypeAnnotations == null) ? null : instructionTypeAnnotations.get(offset);
                     switchArguments = (cfg.getSwitchArguments() == null) ? null : cfg.getSwitchArguments().get(offset);
-                    parseInvokeDynamic(statements, stack, constants, lineNumber,  ((code[++offset] & 255) << 8) | (code[++offset] & 255));
+                    parseInvokeDynamic(statements, stack, constants, lineNumber, references, ((code[++offset] & 255) << 8) | (code[++offset] & 255));
                     offset += 2; // Skip 2 bytes
                     break;
                 case 187: // NEW
@@ -1427,7 +1428,7 @@ public class ByteCodeParser {
         createAssignment(statements, stack, lineNumber, fr, valueRef);
     }
 
-    private void parseInvokeDynamic(Statements statements, DefaultStack<Expression> stack, ConstantPool constants, int lineNumber, int index) {
+    private void parseInvokeDynamic(Statements statements, DefaultStack<Expression> stack, ConstantPool constants, int lineNumber, TypeAnnotationReferences references, int index) {
         // Remove previous 'getClass()' or cast if exists
         if (! statements.isEmpty()) {
             Expression expression = statements.getLast().getExpression();
@@ -1538,9 +1539,13 @@ public class ByteCodeParser {
             ObjectType ot = typeMaker.makeFromInternalTypeName(typeName);
 
             if (name1.equals("<init>")) {
-                stack.push(new ConstructorReferenceExpression(lineNumber, indyMethodTypes.returnedType, ot, descriptor1));
+                ConstructorReferenceExpression constructorReference = new ConstructorReferenceExpression(lineNumber, indyMethodTypes.returnedType, ot, descriptor1);
+                constructorReference.setTypeAnnotationReferences(references);
+                stack.push(constructorReference);
             } else {
-                stack.push(new MethodReferenceExpression(lineNumber, methodReferenceType, new ObjectTypeReferenceExpression(lineNumber, ot), typeName, name1, descriptor1));
+                MethodReferenceExpression methodReference = new MethodReferenceExpression(lineNumber, methodReferenceType, new ObjectTypeReferenceExpression(lineNumber, ot), typeName, name1, descriptor1);
+                methodReference.setTypeAnnotationReferences(references);
+                stack.push(methodReference);
             }
             return;
         }
