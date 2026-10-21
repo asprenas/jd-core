@@ -1,0 +1,9 @@
+# Lambdas and method references, compared by behavior
+capturingThis
+nestedLambda abc
+genericConstructorReference
+intersectionCast
+streamPipeline list:a|abcd|null
+intStream array:1|-2|3
+localClassCapture 4
+useFields

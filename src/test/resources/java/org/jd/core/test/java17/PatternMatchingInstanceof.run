@@ -4,7 +4,7 @@ length int:5
 andCondition abcd
 andCondition ab
 andCondition int:5
-notPattern " x "
+notPattern x
 notPattern int:5
 chain int:5
 chain abc

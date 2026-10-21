@@ -1,0 +1,6 @@
+windowFixed list:int:1|int:2|int:3|int:4
+windowSliding list:int:1|int:2|int:3
+fold list:int:1|int:2|int:3
+scan list:int:1|int:2|int:3
+mapConcurrent list:int:1|int:2
+composed list:int:1|int:2|int:3

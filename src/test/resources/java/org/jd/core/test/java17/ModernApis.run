@@ -1,0 +1,8 @@
+# Java 9 to 17 library methods
+streamToList list:a|b
+repeat ab
+repeat ""
+lines a
+mapOf
+listOf
+hex array:1|-1|16

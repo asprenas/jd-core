@@ -1,0 +1,9 @@
+# Sealed hierarchies with instanceof patterns
+area Circle(1.0)
+area Square(2.0)
+area Rectangle(2.0,3.0)
+area null
+eval Expr.Num(3)
+eval Expr.Add(Expr.Num(1),Expr.Num(2))
+eval Expr.Mul(Expr.Add(Expr.Num(1),Expr.Num(2)),Expr.Num(4))
+eval null
