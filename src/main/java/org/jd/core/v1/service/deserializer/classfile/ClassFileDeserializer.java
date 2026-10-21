@@ -733,6 +733,8 @@ public class ClassFileDeserializer {
         for (int i=0; i<count; i++) {
             int targetType = reader.readUnsignedByte();
             int targetIndex = -1;
+            int secondIndex = -1;
+            int[] localVariableRanges = null;
 
             // 'target_info'
             switch (targetType) {
@@ -746,20 +748,23 @@ public class ClassFileDeserializer {
                     break;
                 case 0x11: case 0x12: // type_parameter_bound_target
                     targetIndex = reader.readUnsignedByte();
-                    reader.readUnsignedByte();
+                    secondIndex = reader.readUnsignedByte();
                     break;
                 case 0x13: case 0x14: case 0x15: // empty_target
                     break;
                 case 0x40: case 0x41: // localvar_target
-                    reader.skip(reader.readUnsignedShort() * 6);
+                    localVariableRanges = new int[reader.readUnsignedShort() * 3];
+                    for (int j=0; j<localVariableRanges.length; j++) {
+                        localVariableRanges[j] = reader.readUnsignedShort();
+                    }
                     break;
                 case 0x42:            // catch_target
                 case 0x43: case 0x44: case 0x45: case 0x46: // offset_target
-                    reader.readUnsignedShort();
+                    targetIndex = reader.readUnsignedShort();
                     break;
                 case 0x47: case 0x48: case 0x49: case 0x4A: case 0x4B: // type_argument_target
-                    reader.readUnsignedShort();
-                    reader.readUnsignedByte();
+                    targetIndex = reader.readUnsignedShort();
+                    secondIndex = reader.readUnsignedByte();
                     break;
                 default:
                     throw new ClassFileFormatException("Invalid type annotation target type");
@@ -776,10 +781,11 @@ public class ClassFileDeserializer {
             String descriptor = constants.getConstantUtf8(reader.readUnsignedShort());
             Annotation annotation = new Annotation(descriptor, loadElementValuePairs(reader, constants));
 
-            if (targetType < 0x40) {
-                // Keep annotations of declarations only: those of the method body (local variables, casts, ...) are not supported
-                typeAnnotations.add(new TypeAnnotation(targetType, targetIndex, typePath.toString(), annotation));
-            }
+            TypeAnnotation typeAnnotation = new TypeAnnotation(targetType, targetIndex, typePath.toString(), annotation);
+
+            typeAnnotation.setSecondIndex(secondIndex);
+            typeAnnotation.setLocalVariableRanges(localVariableRanges);
+            typeAnnotations.add(typeAnnotation);
         }
 
         return typeAnnotations.isEmpty() ? null : typeAnnotations.toArray(new TypeAnnotation[0]);

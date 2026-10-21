@@ -199,7 +199,7 @@ public class TypeVisitor extends AbstractJavaSyntaxVisitor {
         }
 
         // Build token for dimension
-        visitDimension(type.getDimension());
+        visitAnnotatedDimension(type.getDimension(), typeAnnotationPath);
     }
 
     @Override
@@ -224,7 +224,7 @@ public class TypeVisitor extends AbstractJavaSyntaxVisitor {
         }
 
         // Build token for dimension
-        visitDimension(type.getDimension());
+        visitAnnotatedDimension(type.getDimension(), path);
     }
 
     @Override
@@ -261,7 +261,7 @@ public class TypeVisitor extends AbstractJavaSyntaxVisitor {
         }
 
         // Build token for dimension
-        visitDimension(type.getDimension());
+        visitAnnotatedDimension(type.getDimension(), path);
     }
 
     protected void visitTypeArgumentList(BaseTypeArgument arguments) {
@@ -279,6 +279,28 @@ public class TypeVisitor extends AbstractJavaSyntaxVisitor {
             }
 
             tokens.add(TextToken.RIGHTANGLEBRACKET);
+        }
+    }
+
+    /**
+     * 'String @A [] @B []': the first '[]' is the array type ('type_path' of the array), the next ones are the
+     * component types (one more '0,0;' step each)
+     */
+    protected void visitAnnotatedDimension(int dimension, String path) {
+        if ((typeAnnotationReferences == null) || (dimension == 0)) {
+            visitDimension(dimension);
+            return;
+        }
+
+        String p = path;
+
+        for (int i=0; i<dimension; i++) {
+            if (typeAnnotationReferences.get(typeAnnotationTarget, typeAnnotationIndex, p) != null) {
+                tokens.add(TextToken.SPACE);
+                visitTypeAnnotations(p);
+            }
+            tokens.add(TextToken.DIMENSION_1);
+            p += "0,0;";
         }
     }
 
@@ -321,21 +343,29 @@ public class TypeVisitor extends AbstractJavaSyntaxVisitor {
         tokens.add(EXTENDS);
         tokens.add(TextToken.SPACE);
 
-        // Annotations of the bounds (targets 0x11 and 0x12) are not supported
-        TypeAnnotationReferences references = typeAnnotationReferences;
-        typeAnnotationReferences = null;
-
         BaseType types = parameter.getTypeBounds();
 
-        if (types.isList()) {
-            buildTokensForList(types.getList(), TextToken.SPACE_AND_SPACE);
+        if (typeAnnotationReferences == null) {
+            if (types.isList()) {
+                buildTokensForList(types.getList(), TextToken.SPACE_AND_SPACE);
+            } else {
+                BaseType type = types.getFirst();
+
+                type.accept(this);
+            }
         } else {
-            BaseType type = types.getFirst();
+            // 'T extends @A Number & @B Comparable<T>': type parameter target 0x00 / 0x01, bound target 0x11 / 0x12
+            int boundTarget = typeAnnotationTarget + TypeAnnotationReferences.CLASS_TYPE_PARAMETER_BOUND;
+            int baseIndex = typeAnnotationIndex * 256;
+            List<Type> list = types.isList() ? types.getList() : java.util.Collections.singletonList(types.getFirst());
 
-            type.accept(this);
+            for (int i=0, size=list.size(); i<size; i++) {
+                if (i > 0) {
+                    tokens.add(TextToken.SPACE_AND_SPACE);
+                }
+                visitAnnotatedType(list.get(i), typeAnnotationReferences, boundTarget, baseIndex + i, "");
+            }
         }
-
-        typeAnnotationReferences = references;
     }
 
     @Override
@@ -363,7 +393,7 @@ public class TypeVisitor extends AbstractJavaSyntaxVisitor {
     public void visit(GenericType type) {
         visitTypeAnnotations(elementTypeAnnotationPath(type.getDimension()));
         tokens.add(newTextToken(type.getName()));
-        visitDimension(type.getDimension());
+        visitAnnotatedDimension(type.getDimension(), typeAnnotationPath);
     }
 
     @Override

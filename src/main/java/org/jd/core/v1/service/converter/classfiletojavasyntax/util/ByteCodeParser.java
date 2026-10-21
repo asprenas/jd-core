@@ -12,11 +12,14 @@ import org.jd.core.v1.model.classfile.ConstantPool;
 import org.jd.core.v1.model.classfile.Method;
 import org.jd.core.v1.model.classfile.attribute.AttributeBootstrapMethods;
 import org.jd.core.v1.model.classfile.attribute.AttributeCode;
+import org.jd.core.v1.model.classfile.attribute.AttributeTypeAnnotations;
+import org.jd.core.v1.model.classfile.attribute.TypeAnnotation;
 import org.jd.core.v1.model.classfile.attribute.BootstrapMethod;
 import org.jd.core.v1.model.classfile.constant.*;
 import org.jd.core.v1.model.javasyntax.AbstractJavaSyntaxVisitor;
 import org.jd.core.v1.model.javasyntax.declaration.*;
 import org.jd.core.v1.model.javasyntax.expression.*;
+import org.jd.core.v1.model.javasyntax.reference.TypeAnnotationReferences;
 import org.jd.core.v1.model.javasyntax.statement.*;
 import org.jd.core.v1.model.javasyntax.type.*;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.model.cfg.BasicBlock;
@@ -64,6 +67,8 @@ public class ByteCodeParser {
     private Type returnedType;
     private int[] switchArguments;
 
+    protected Map<Integer, TypeAnnotationReferences> castTypeAnnotations;
+
     public ByteCodeParser(
             TypeMaker typeMaker, LocalVariableMaker localVariableMaker, ClassFile classFile,
             ClassFileBodyDeclaration bodyDeclaration, ClassFileConstructorOrMethodDeclaration comd) {
@@ -81,6 +86,59 @@ public class ByteCodeParser {
         } else {
             this.typeParametersToTypeArgumentsBinder = new JavaTypeParametersToTypeArgumentsBinder();
         }
+
+        this.castTypeAnnotations = makeCastTypeAnnotations(typeMaker, comd.getMethod());
+    }
+
+    /**
+     * @return 'offset' if it is a 'checkcast', the next offset if it is one (JDK 8 javac gives the offset of the
+     *         instruction that loads the operand), or -1
+     */
+    protected static int getCheckCastOffset(byte[] code, int offset) {
+        if ((offset < 0) || (offset >= code.length)) {
+            return -1;
+        }
+        if ((code[offset] & 255) == 192) { // CHECKCAST
+            return offset;
+        }
+
+        int next = offset + RecordPatternMaker.getInstructionLength(code, offset);
+        return ((next < code.length) && ((code[next] & 255) == 192)) ? next : -1;
+    }
+
+    /** 'cast' type annotations ('(@A String)o') by offset of the 'checkcast' instruction, or null */
+    protected static Map<Integer, TypeAnnotationReferences> makeCastTypeAnnotations(TypeMaker typeMaker, Method method) {
+        AttributeCode code = method.getAttribute("Code");
+        Map<Integer, TypeAnnotationReferences> map = null;
+
+        if (code != null) {
+            AnnotationConverter annotationConverter = new AnnotationConverter(typeMaker);
+
+            for (String name : new String[] { "RuntimeVisibleTypeAnnotations", "RuntimeInvisibleTypeAnnotations" }) {
+                AttributeTypeAnnotations attribute = code.getAttribute(name);
+
+                if (attribute != null) {
+                    for (TypeAnnotation ta : attribute.getTypeAnnotations()) {
+                        // 'type_argument_index' 0: not a bound of an intersection cast '(A & B)'
+                        if ((ta.getTargetType() == TypeAnnotationReferences.CAST) && (ta.getSecondIndex() == 0)) {
+                            int offset = getCheckCastOffset(code.getCode(), ta.getTargetIndex());
+
+                            if (offset == -1) {
+                                // No 'checkcast': '(@A Object)s', an upcast removed by javac
+                                continue;
+                            }
+                            if (map == null) {
+                                map = new HashMap<>();
+                            }
+                            map.computeIfAbsent(offset, k -> new TypeAnnotationReferences())
+                               .add(TypeAnnotationReferences.CAST, 0, ta.getTypePath(), annotationConverter.convertTypeAnnotation(ta));
+                        }
+                    }
+                }
+            }
+        }
+
+        return map;
     }
 
     @SuppressWarnings("unchecked")
@@ -847,10 +905,18 @@ public class ByteCodeParser {
                     statements.add(new ThrowStatement(stack.pop()));
                     break;
                 case 192: // CHECKCAST
+                    TypeAnnotationReferences castAnnotations = (castTypeAnnotations == null) ? null : castTypeAnnotations.get(offset);
                     typeName = constants.getConstantTypeName( ((code[++offset] & 255) << 8) | (code[++offset] & 255) );
                     type1 = typeMaker.makeFromDescriptorOrInternalTypeName(typeName);
                     expression1 = stack.peek();
-                    if (type1.isObjectType() && expression1.getType().isObjectType() && typeMaker.isRawTypeAssignable((ObjectType) type1, (ObjectType) expression1.getType())) {
+                    if (castAnnotations != null) {
+                        // '(@A String)o': kept even when the cast is not necessary
+                        searchFirstLineNumberVisitor.init();
+                        expression1.accept(searchFirstLineNumberVisitor);
+                        CastExpression castExpression = new CastExpression(searchFirstLineNumberVisitor.getLineNumber(), type1, forceExplicitCastExpression(stack.pop()));
+                        castExpression.setTypeAnnotationReferences(castAnnotations);
+                        stack.push(castExpression);
+                    } else if (type1.isObjectType() && expression1.getType().isObjectType() && typeMaker.isRawTypeAssignable((ObjectType) type1, (ObjectType) expression1.getType())) {
                         // Ignore cast
                     } else if (expression1.isCastExpression()) {
                         // Skip double cast

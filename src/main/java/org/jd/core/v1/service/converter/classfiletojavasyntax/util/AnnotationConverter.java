@@ -59,6 +59,18 @@ public class AnnotationConverter implements ElementValueVisitor {
     public TypeAnnotationReferences convert(
             AttributeTypeAnnotations visibles, AttributeTypeAnnotations invisibles,
             Annotations[] declarationAnnotations, AttributeParameterAnnotations[] parameterAnnotations) {
+        return convert(visibles, invisibles, declarationAnnotations, parameterAnnotations, null);
+    }
+
+    /**
+     * @param typeParameterClassBounds for each type parameter, true if its signature has a class bound
+     *                                 ('T:Ljava/lang/Number;'), false for interface bounds only ('T::Ljava/lang/Comparable;'),
+     *                                 or null
+     */
+    public TypeAnnotationReferences convert(
+            AttributeTypeAnnotations visibles, AttributeTypeAnnotations invisibles,
+            Annotations[] declarationAnnotations, AttributeParameterAnnotations[] parameterAnnotations,
+            boolean[] typeParameterClassBounds) {
         TypeAnnotationReferences references = new TypeAnnotationReferences();
 
         for (AttributeTypeAnnotations attribute : new AttributeTypeAnnotations[] { visibles, invisibles }) {
@@ -77,12 +89,78 @@ public class AnnotationConverter implements ElementValueVisitor {
                         }
                     }
 
-                    references.add(ta.getTargetType(), ta.getTargetIndex(), ta.getTypePath(), convert(ta.getAnnotation()));
+                    int targetIndex = ta.getTargetIndex();
+
+                    if ((ta.getTargetType() == TypeAnnotationReferences.CLASS_TYPE_PARAMETER_BOUND) || (ta.getTargetType() == TypeAnnotationReferences.METHOD_TYPE_PARAMETER_BOUND)) {
+                        // 'bound_index' 0 is the class bound, even when the type parameter has interface bounds only
+                        if ((typeParameterClassBounds == null) || (targetIndex >= typeParameterClassBounds.length)) {
+                            continue;
+                        }
+                        int boundIndex = typeParameterClassBounds[targetIndex] ? ta.getSecondIndex() : ta.getSecondIndex() - 1;
+                        targetIndex = targetIndex * 256 + boundIndex;
+                    }
+
+                    references.add(ta.getTargetType(), targetIndex, ta.getTypePath(), convert(ta.getAnnotation()));
                 }
             }
         }
 
         return references.isEmpty() ? null : references;
+    }
+
+    /**
+     * @param signature class or method signature: '<T:Ljava/lang/Object;U::Ljava/lang/Comparable<TU;>;>...'
+     * @return for each type parameter, true if it has a class bound; or null
+     */
+    public static boolean[] getTypeParameterClassBounds(String signature) {
+        if ((signature == null) || !signature.startsWith("<")) {
+            return null;
+        }
+
+        java.util.ArrayList<Boolean> classBounds = new java.util.ArrayList<>();
+        int i = 1;
+
+        while (signature.charAt(i) != '>') {
+            // Identifier, then ':' class bound (may be empty), then ':' interface bounds
+            i = signature.indexOf(':', i);
+            classBounds.add(signature.charAt(i + 1) != ':');
+
+            while (signature.charAt(i) == ':') {
+                i++;
+                if (signature.charAt(i) != ':') {
+                    i = skipReferenceTypeSignature(signature, i);
+                }
+            }
+        }
+
+        boolean[] result = new boolean[classBounds.size()];
+        for (int j = 0; j < result.length; j++) {
+            result[j] = classBounds.get(j);
+        }
+        return result;
+    }
+
+    /** @return the index after 'Lpkg/Name<...>.Inner<...>;', 'TT;' or '[...' starting at 'i' */
+    protected static int skipReferenceTypeSignature(String signature, int i) {
+        switch (signature.charAt(i)) {
+            case 'T':
+                return signature.indexOf(';', i) + 1;
+            case '[':
+                i++;
+                return ("BCDFIJSZ".indexOf(signature.charAt(i)) != -1) ? i + 1 : skipReferenceTypeSignature(signature, i);
+            default: // 'L'
+                int depth = 0;
+                for (i++; ; i++) {
+                    char c = signature.charAt(i);
+                    if (c == '<') {
+                        depth++;
+                    } else if (c == '>') {
+                        depth--;
+                    } else if ((c == ';') && (depth == 0)) {
+                        return i + 1;
+                    }
+                }
+        }
     }
 
     protected static boolean contains(Annotations[] annotationsArray, String descriptor) {
@@ -115,6 +193,10 @@ public class AnnotationConverter implements ElementValueVisitor {
         }
 
         return false;
+    }
+
+    public AnnotationReference convertTypeAnnotation(TypeAnnotation typeAnnotation) {
+        return convert(typeAnnotation.getAnnotation());
     }
 
     @SuppressWarnings("unchecked")

@@ -252,7 +252,7 @@ public class CompilationUnitVisitor extends StatementVisitor {
                 tokens = new Tokens();
                 tokens.add(EXTENDS);
                 tokens.add(TextToken.SPACE);
-                superType.accept(this);
+                visitAnnotatedType(superType, declaration.getTypeAnnotationReferences(), TypeAnnotationReferences.SUPERTYPE, TypeAnnotationReferences.EXTENDS_INDEX, "");
                 fragments.addTokensFragment(tokens);
 
                 tokens = new Tokens();
@@ -269,7 +269,7 @@ public class CompilationUnitVisitor extends StatementVisitor {
                 tokens = new Tokens();
                 tokens.add(IMPLEMENTS);
                 tokens.add(TextToken.SPACE);
-                interfaces.accept(this);
+                visitSuperInterfaces(interfaces, declaration.getTypeAnnotationReferences());
                 fragments.addTokensFragment(tokens);
 
                 tokens = new Tokens();
@@ -541,7 +541,7 @@ public class CompilationUnitVisitor extends StatementVisitor {
                 tokens = new Tokens();
                 tokens.add(IMPLEMENTS);
                 tokens.add(TextToken.SPACE);
-                interfaces.accept(this);
+                visitSuperInterfaces(interfaces, declaration.getTypeAnnotationReferences());
                 fragments.addTokensFragment(tokens);
 
                 tokens = new Tokens();
@@ -761,6 +761,16 @@ public class CompilationUnitVisitor extends StatementVisitor {
             BaseType type = arrayType.createType(arrayType.getDimension() - 1);
             // 'String...' is an array: the printed type is its element type
             visitAnnotatedType(type, typeAnnotationReferences, TypeAnnotationReferences.METHOD_FORMAL_PARAMETER, index, "0,0;");
+
+            if (typeAnnotationReferences != null) {
+                // 'String @A ... args': the annotations of the array
+                AnnotationReferences<AnnotationReference> references = typeAnnotationReferences.get(TypeAnnotationReferences.METHOD_FORMAL_PARAMETER, index, "");
+
+                if (references != null) {
+                    tokens.add(TextToken.SPACE);
+                    references.accept(this);
+                }
+            }
             tokens.add(TextToken.VARARGS);
         } else {
             if (declaration.isFinal()) {
@@ -785,6 +795,25 @@ public class CompilationUnitVisitor extends StatementVisitor {
             tokens.add(newTextToken(name));
         }
         currentMethodParamNames.add(name);
+    }
+
+    /** 'implements A, B' or 'extends A, B': the 'supertype_target' index is the index in the list */
+    @SuppressWarnings("unchecked")
+    protected void visitSuperInterfaces(BaseType interfaces, TypeAnnotationReferences typeAnnotationReferences) {
+        if (typeAnnotationReferences == null) {
+            interfaces.accept(this);
+        } else if (interfaces.isList()) {
+            List<Type> list = interfaces.getList();
+
+            for (int i=0, size=list.size(); i<size; i++) {
+                if (i > 0) {
+                    tokens.add(TextToken.COMMA_SPACE);
+                }
+                visitAnnotatedType(list.get(i), typeAnnotationReferences, TypeAnnotationReferences.SUPERTYPE, i, "");
+            }
+        } else {
+            visitAnnotatedType(interfaces.getFirst(), typeAnnotationReferences, TypeAnnotationReferences.SUPERTYPE, 0, "");
+        }
     }
 
     protected void visitFormalParameters(BaseFormalParameter formalParameters, TypeAnnotationReferences typeAnnotationReferences) {
@@ -868,7 +897,7 @@ public class CompilationUnitVisitor extends StatementVisitor {
                 tokens = new Tokens();
                 tokens.add(EXTENDS);
                 tokens.add(TextToken.SPACE);
-                interfaces.accept(this);
+                visitSuperInterfaces(interfaces, declaration.getTypeAnnotationReferences());
                 fragments.addTokensFragment(tokens);
 
                 tokens = new Tokens();

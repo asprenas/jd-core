@@ -7,6 +7,7 @@
 
 package org.jd.core.v1.service.converter.classfiletojavasyntax.model.localvariable;
 
+import org.jd.core.v1.model.javasyntax.reference.TypeAnnotationReferences;
 import org.jd.core.v1.model.javasyntax.type.BaseType;
 import org.jd.core.v1.model.javasyntax.type.Type;
 import org.jd.core.v1.util.DefaultList;
@@ -25,6 +26,7 @@ public abstract class AbstractLocalVariable {
     protected String name;
     protected DefaultList<LocalVariableReference> references = new DefaultList<>();
     protected HashSet<AbstractLocalVariable> variablesOnRight = null;
+    protected TypeAnnotationReferences typeAnnotationReferences; // 'localvar_target' annotations of the declared type
     protected HashSet<AbstractLocalVariable> variablesOnLeft = null;
 
     public AbstractLocalVariable(int index, int offset, String name) {
@@ -80,6 +82,9 @@ public abstract class AbstractLocalVariable {
     public abstract int getDimension();
 
     public abstract void accept(LocalVariableVisitor visitor);
+
+    public TypeAnnotationReferences getTypeAnnotationReferences() { return typeAnnotationReferences; }
+    public void setTypeAnnotationReferences(TypeAnnotationReferences typeAnnotationReferences) { this.typeAnnotationReferences = typeAnnotationReferences; }
 
     public DefaultList<LocalVariableReference> getReferences() { return references; }
     public void addReference(LocalVariableReference reference) { references.add(reference); }

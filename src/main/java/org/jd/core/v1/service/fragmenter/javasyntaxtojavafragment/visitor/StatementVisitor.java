@@ -16,6 +16,7 @@ import org.jd.core.v1.model.javafragment.TokensFragment;
 import org.jd.core.v1.model.javasyntax.expression.Expression;
 import org.jd.core.v1.model.javasyntax.expression.SwitchExpression;
 import org.jd.core.v1.model.javasyntax.statement.*;
+import org.jd.core.v1.model.javasyntax.reference.TypeAnnotationReferences;
 import org.jd.core.v1.model.javasyntax.type.BaseType;
 import org.jd.core.v1.model.token.*;
 import org.jd.core.v1.service.fragmenter.javasyntaxtojavafragment.util.ArrowSwitchUtil;
@@ -459,8 +460,11 @@ public class StatementVisitor extends ExpressionVisitor {
             diamondOperatorSupported = statement.isVar() && diamondOperatorSupported;
         } else {
             BaseType type = statement.getType();
+            // '@A String local = ...': the annotations of the variable ('localvar_target')
+            TypeAnnotationReferences references = (statement.getLocalVariableDeclarators() instanceof LocalVariableDeclarator) ?
+                ((LocalVariableDeclarator)statement.getLocalVariableDeclarators()).getTypeAnnotationReferences() : null;
 
-            type.accept(this);
+            visitAnnotatedType(type, references, TypeAnnotationReferences.LOCAL_VARIABLE, -1, "");
         }
 
         tokens.add(TextToken.SPACE);
