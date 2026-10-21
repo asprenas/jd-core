@@ -68,6 +68,7 @@ public class ByteCodeParser {
     private int[] switchArguments;
 
     protected Map<Integer, TypeAnnotationReferences> castTypeAnnotations;
+    protected Map<Integer, TypeAnnotationReferences> upcastTypeAnnotations;
 
     public ByteCodeParser(
             TypeMaker typeMaker, LocalVariableMaker localVariableMaker, ClassFile classFile,
@@ -87,7 +88,8 @@ public class ByteCodeParser {
             this.typeParametersToTypeArgumentsBinder = new JavaTypeParametersToTypeArgumentsBinder();
         }
 
-        this.castTypeAnnotations = makeCastTypeAnnotations(typeMaker, comd.getMethod());
+        this.castTypeAnnotations = makeCastTypeAnnotations(typeMaker, comd.getMethod(), true);
+        this.upcastTypeAnnotations = makeCastTypeAnnotations(typeMaker, comd.getMethod(), false);
     }
 
     /**
@@ -106,8 +108,33 @@ public class ByteCodeParser {
         return ((next < code.length) && ((code[next] & 255) == 192)) ? next : -1;
     }
 
+    /**
+     * @return 'offset' if it is an 'astore', the next offset if it is one (JDK 8 javac gives the offset of the
+     *         instruction that loads the operand), or -1. -1 if there is a 'checkcast'
+     */
+    protected static int getUpcastStoreOffset(byte[] code, int offset) {
+        if ((offset < 0) || (offset >= code.length) || (getCheckCastOffset(code, offset) != -1)) {
+            return -1;
+        }
+        if (isAStore(code[offset] & 255)) {
+            return offset;
+        }
+
+        int next = offset + RecordPatternMaker.getInstructionLength(code, offset);
+        return ((next < code.length) && isAStore(code[next] & 255)) ? next : -1;
+    }
+
+    protected static boolean isAStore(int opcode) {
+        return (opcode == 58) || ((opcode >= 75) && (opcode <= 78)); // ASTORE, ASTORE_0 ... ASTORE_3
+    }
+
     /** 'cast' type annotations ('(@A String)o') by offset of the 'checkcast' instruction, or null */
-    protected static Map<Integer, TypeAnnotationReferences> makeCastTypeAnnotations(TypeMaker typeMaker, Method method) {
+    /**
+     * @param checkCast true: by offset of the 'checkcast' instruction. false: casts without 'checkcast' ('(@A Object)s'
+     *                  is an upcast, javac does not check it) whose value is stored in a local variable, by offset of
+     *                  the 'astore' instruction
+     */
+    protected static Map<Integer, TypeAnnotationReferences> makeCastTypeAnnotations(TypeMaker typeMaker, Method method, boolean checkCast) {
         AttributeCode code = method.getAttribute("Code");
         Map<Integer, TypeAnnotationReferences> map = null;
 
@@ -121,10 +148,9 @@ public class ByteCodeParser {
                     for (TypeAnnotation ta : attribute.getTypeAnnotations()) {
                         // 'type_argument_index' 0: not a bound of an intersection cast '(A & B)'
                         if ((ta.getTargetType() == TypeAnnotationReferences.CAST) && (ta.getSecondIndex() == 0)) {
-                            int offset = getCheckCastOffset(code.getCode(), ta.getTargetIndex());
+                            int offset = checkCast ? getCheckCastOffset(code.getCode(), ta.getTargetIndex()) : getUpcastStoreOffset(code.getCode(), ta.getTargetIndex());
 
                             if (offset == -1) {
-                                // No 'checkcast': '(@A Object)s', an upcast removed by javac
                                 continue;
                             }
                             if (map == null) {
@@ -281,6 +307,7 @@ public class ByteCodeParser {
                     break;
                 case 58: // ASTORE
                     localVariable = getLocalVariableInAssignment(code[++offset] & 255, offset + 1, valueRef = stack.pop());
+                    valueRef = addUpcast(stack, offset - 1, localVariable, valueRef);
                     parseASTORE(statements, stack, lineNumber, offset, localVariable, valueRef);
                     break;
                 case 59: case 60: case 61: case 62: // ISTORE_0 ... ISTORE_3
@@ -301,6 +328,7 @@ public class ByteCodeParser {
                     break;
                 case 75: case 76: case 77: case 78: // ASTORE_0 ... ASTORE_3
                     localVariable = getLocalVariableInAssignment(opcode - 75, offset + 1, valueRef = stack.pop());
+                    valueRef = addUpcast(stack, offset, localVariable, valueRef);
                     parseASTORE(statements, stack, lineNumber, offset, localVariable, valueRef);
                     break;
                 case 79: // IASTORE
@@ -1586,6 +1614,22 @@ public class ByteCodeParser {
         if (expression.isFloatConstantExpression() && expression.getFloatValue() == -1.0F)
             return true;
         return (expression.isDoubleConstantExpression() && expression.getDoubleValue() == -1.0D);
+    }
+
+    /**
+     * '(@A Object)s': the type annotation of a cast without 'checkcast'. Any upcast compiles to the same byte code,
+     * the type of the variable is the cast type
+     */
+    private Expression addUpcast(DefaultStack<Expression> stack, int offset, AbstractLocalVariable localVariable, Expression valueRef) {
+        TypeAnnotationReferences references = (upcastTypeAnnotations == null) ? null : upcastTypeAnnotations.get(offset);
+
+        if ((references == null) || !localVariable.getType().isObjectType() || (!stack.isEmpty() && (stack.peek() == valueRef))) {
+            return valueRef;
+        }
+
+        CastExpression castExpression = new CastExpression(valueRef.getLineNumber(), localVariable.getType(), valueRef, true);
+        castExpression.setTypeAnnotationReferences(references);
+        return castExpression;
     }
 
     private void parseASTORE(Statements statements, DefaultStack<Expression> stack, int lineNumber, int offset, AbstractLocalVariable localVariable, Expression valueRef) {

@@ -1,6 +1,7 @@
 # Phase 5-4: type annotations on declarations (return, parameter, type argument, throws, type parameter)
-# and in method bodies (local variable, cast with a checkcast instruction)
+# and in method bodies (local variable, cast; an upcast has no checkcast, its type is the type of the variable)
 + public @NonNull String typeUse(@NonNull String param, List<@NonNull String> list) throws @NonNull RuntimeException
 + public <@NonNull T> T typeParameter(T value)
 + @NonNull String local = param;
 + (@NonNull String)o
++ Object o = (@NonNull Object)local;
