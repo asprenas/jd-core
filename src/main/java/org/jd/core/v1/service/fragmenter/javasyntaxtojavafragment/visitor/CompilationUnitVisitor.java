@@ -18,6 +18,7 @@ import org.jd.core.v1.model.javasyntax.statement.BaseStatement;
 import org.jd.core.v1.model.javasyntax.type.*;
 import org.jd.core.v1.model.token.*;
 import org.jd.core.v1.service.fragmenter.javasyntaxtojavafragment.util.JavaFragmentFactory;
+import org.jd.core.v1.service.fragmenter.javasyntaxtojavafragment.util.UnnamedVariableUtil;
 
 import java.util.Iterator;
 import java.util.List;
@@ -777,7 +778,12 @@ public class CompilationUnitVisitor extends StatementVisitor {
 
         String name = declaration.getName();
 
-        tokens.add(newTextToken(name));
+        if ((unnamedFormalParameterNames != null) && unnamedFormalParameterNames.contains(name)) {
+            // Unread lambda parameter: '(a, _) -> a'
+            tokens.add(newTextToken(UnnamedVariableUtil.UNNAMED));
+        } else {
+            tokens.add(newTextToken(name));
+        }
         currentMethodParamNames.add(name);
     }
 
@@ -1108,7 +1114,7 @@ public class CompilationUnitVisitor extends StatementVisitor {
 
             visitDimension(declarator.getDimension());
         } else {
-            tokens.add(newTextToken(declarator.getName()));
+            tokens.add(newTextToken((declarator == unnamedDeclarator) ? UnnamedVariableUtil.UNNAMED : declarator.getName()));
 
             visitDimension(declarator.getDimension());
 

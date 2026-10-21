@@ -40,6 +40,8 @@ public class JavaSyntaxToJavaFragmentProcessor implements Processor {
         Map<String, Object> configuration = message.getHeader("configuration");
         Object textBlocks = (configuration == null) ? null : configuration.get("textBlocks");
         visitor.setTextBlocksEnabled((textBlocks != null) && "true".equals(textBlocks.toString()));
+        Object unnamedVariables = (configuration == null) ? null : configuration.get("unnamedVariables");
+        visitor.setUnnamedVariablesEnabled((unnamedVariables != null) && "true".equals(unnamedVariables.toString()));
         visitor.visit(compilationUnit);
         message.setBody(visitor.getFragments());
     }

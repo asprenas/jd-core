@@ -21,6 +21,7 @@ import org.jd.core.v1.model.token.*;
 import org.jd.core.v1.service.fragmenter.javasyntaxtojavafragment.util.CharacterUtil;
 import org.jd.core.v1.service.fragmenter.javasyntaxtojavafragment.util.JavaFragmentFactory;
 import org.jd.core.v1.service.fragmenter.javasyntaxtojavafragment.util.StringUtil;
+import org.jd.core.v1.service.fragmenter.javasyntaxtojavafragment.util.UnnamedVariableUtil;
 import org.jd.core.v1.util.DefaultList;
 
 import java.util.HashSet;
@@ -52,11 +53,16 @@ public class ExpressionVisitor extends TypeVisitor {
     protected HexaExpressionVisitor hexaExpressionVisitor = new HexaExpressionVisitor();
     protected boolean textBlocksSupported;
     protected boolean textBlocksEnabled;
+    protected boolean unnamedVariablesSupported;
+    protected boolean unnamedVariablesEnabled;
+    // Unread formal parameters of the lambda being printed, written '_'
+    protected HashSet<String> unnamedFormalParameterNames;
 
     public ExpressionVisitor(Loader loader, String mainInternalTypeName, int majorVersion, ImportsFragment importsFragment) {
         super(loader, mainInternalTypeName, majorVersion, importsFragment);
         this.diamondOperatorSupported = (majorVersion >= 51); // (majorVersion >= Java 7)
         this.textBlocksSupported = (majorVersion >= 59); // (majorVersion >= Java 15)
+        this.unnamedVariablesSupported = (majorVersion >= UnnamedVariableUtil.JAVA_22);
     }
 
     public DefaultList<Fragment> getFragments() {
@@ -315,9 +321,12 @@ public class ExpressionVisitor extends TypeVisitor {
                     tokens.add(TextToken.LEFTRIGHTROUNDBRACKETS);
                     break;
                 case 1:
+                    unnamedFormalParameterNames = getUnnamedParameterNames(parameters, expression.getStatements());
                     parameters.getFirst().accept(this);
+                    unnamedFormalParameterNames = null;
                     break;
                 default:
+                    unnamedFormalParameterNames = getUnnamedParameterNames(parameters, expression.getStatements());
                     tokens.add(TextToken.LEFTROUNDBRACKET);
                     Iterator<FormalParameter> iterator = parameters.iterator();
                     iterator.next().accept(this);
@@ -328,6 +337,7 @@ public class ExpressionVisitor extends TypeVisitor {
                     }
 
                     tokens.add(TextToken.RIGHTROUNDBRACKET);
+                    unnamedFormalParameterNames = null;
                     break;
             }
         }
@@ -349,15 +359,15 @@ public class ExpressionVisitor extends TypeVisitor {
                     tokens.add(TextToken.LEFTRIGHTROUNDBRACKETS);
                     break;
                 case 1:
-                    tokens.add(newTextToken(parameters.get(0)));
+                    tokens.add(newTextToken(getVariableName(parameters.get(0), expression.getStatements())));
                     break;
                 default:
                     tokens.add(TextToken.LEFTROUNDBRACKET);
-                    tokens.add(newTextToken(parameters.get(0)));
+                    tokens.add(newTextToken(getVariableName(parameters.get(0), expression.getStatements())));
 
                     for (int i = 1; i < size; i++) {
                         tokens.add(TextToken.COMMA_SPACE);
-                        tokens.add(newTextToken(parameters.get(i)));
+                        tokens.add(newTextToken(getVariableName(parameters.get(i), expression.getStatements())));
                     }
                     tokens.add(TextToken.RIGHTROUNDBRACKET);
                     break;
@@ -669,6 +679,31 @@ public class ExpressionVisitor extends TypeVisitor {
      * Java 15+ text blocks for the strings of several lines ('textBlocks' configuration, off by default: the line
      * breaks of a text block are not known by the layout, the following lines of the output are shifted)
      */
+    public void setUnnamedVariablesEnabled(boolean enabled) {
+        this.unnamedVariablesEnabled = enabled && unnamedVariablesSupported;
+    }
+
+    protected HashSet<String> getUnnamedParameterNames(BaseFormalParameter parameters, BaseStatement body) {
+        if (!unnamedVariablesEnabled) {
+            return null;
+        }
+
+        HashSet<String> names = new HashSet<>();
+
+        for (FormalParameter parameter : parameters) {
+            if (!UnnamedVariableUtil.isReferenced(body, parameter.getName())) {
+                names.add(parameter.getName());
+            }
+        }
+
+        return names;
+    }
+
+    /** @return '_' for a variable not read in its scope ('unnamedVariables' configuration) */
+    protected String getVariableName(String name, BaseStatement scope) {
+        return (unnamedVariablesEnabled && !UnnamedVariableUtil.isReferenced(scope, name)) ? UnnamedVariableUtil.UNNAMED : name;
+    }
+
     public void setTextBlocksEnabled(boolean enabled) {
         this.textBlocksEnabled = enabled && textBlocksSupported;
     }
