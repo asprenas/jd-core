@@ -63,6 +63,10 @@ public class TryStatement implements Statement {
         protected String name;
         protected Expression expression;
 
+        /**
+         * @param type null for a Java 9+ resource without declaration, 'try (reader)'
+         * @param name null for an unnamed variable, 'try (var _ = ...)'
+         */
         public Resource(ObjectType type, String name, Expression expression) {
             this.type = type;
             this.name = name;

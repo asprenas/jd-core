@@ -1,3 +1,7 @@
-# Resources must still be closed (JDK 11+ try-with-resources is desugared for now, Phase 4-4)
-+ .close();
+# Phase 4-4: JDK 11+ try-with-resources (close() inlined by javac) is rebuilt
++ try (reader) {
+~ try ?\(in; out\)
+~ try ?\(in; OutputStream out = new FileOutputStream\(path\)\)
++ try (this.fieldReader) {
+- addSuppressed
 - $closeResource

@@ -7,8 +7,10 @@
 
 package org.jd.core.v1.service.converter.classfiletojavasyntax.util;
 
+import org.jd.core.v1.model.javasyntax.AbstractJavaSyntaxVisitor;
 import org.jd.core.v1.model.javasyntax.expression.BinaryOperatorExpression;
 import org.jd.core.v1.model.javasyntax.expression.Expression;
+import org.jd.core.v1.model.javasyntax.expression.LocalVariableReferenceExpression;
 import org.jd.core.v1.model.javasyntax.expression.MethodInvocationExpression;
 import org.jd.core.v1.model.javasyntax.expression.NullExpression;
 import org.jd.core.v1.model.javasyntax.statement.*;
@@ -25,10 +27,14 @@ public class TryWithResourcesStatementMaker {
 
     public static Statement make(
             LocalVariableMaker localVariableMaker, Statements statements, Statements tryStatements,
-            DefaultList<TryStatement.CatchClause> catchClauses, Statements finallyStatements) {
+            DefaultList<TryStatement.CatchClause> catchClauses, Statements finallyStatements, int majorVersion) {
         int size = statements.size();
 
-        if ((size < 2) || (finallyStatements == null) || (finallyStatements.size() != 1) || !checkThrowable(catchClauses)) {
+        if ((finallyStatements == null) || (finallyStatements.size() == 0)) {
+            return parsePatternInlinedClose(localVariableMaker, statements, tryStatements, catchClauses, majorVersion);
+        }
+
+        if ((size < 2) || (finallyStatements.size() != 1) || !checkThrowable(catchClauses)) {
             return null;
         }
 
@@ -242,6 +248,233 @@ public class TryWithResourcesStatementMaker {
         }
 
         return newTryStatement(localVariableMaker, statements, tryStatements, finallyStatements, boe, lv1, lv2);
+    }
+
+    /**
+     * JDK 11+ javac inlines the calls to 'close()':
+     * <pre>
+     * r = expression;
+     * try {
+     *     ...
+     *     if (r != null) r.close();      // before each exit, 'if' omitted when 'r' can not be null
+     *     return x;
+     * } catch (Throwable t) {
+     *     if (r != null) try { r.close(); } catch (Throwable t2) { t.addSuppressed(t2); }
+     *     throw t;
+     * }
+     * </pre>
+     * The calls are removed from the body. When the body does not read 'r', the resource is the copied variable
+     * or field: 'try (expression)' (Java 9+), otherwise 'try (Type r = expression)'.
+     */
+    protected static Statement parsePatternInlinedClose(
+            LocalVariableMaker localVariableMaker, Statements statements, Statements tryStatements,
+            DefaultList<TryStatement.CatchClause> catchClauses, int majorVersion) {
+        if ((statements.size() < 1) || (tryStatements == null) || !checkThrowable(catchClauses)) {
+            return null;
+        }
+
+        // 'r = expression;'
+        Statement statement = statements.getLast();
+
+        if (!statement.isExpressionStatement()) {
+            return null;
+        }
+
+        Expression boe = statement.getExpression();
+
+        if (!boe.isBinaryOperatorExpression() || !boe.getOperator().equals("=") || !boe.getLeftExpression().isLocalVariableReferenceExpression()) {
+            return null;
+        }
+
+        AbstractLocalVariable resource = ((ClassFileLocalVariableReferenceExpression)boe.getLeftExpression()).getLocalVariable();
+
+        if (!(resource.getType() instanceof ObjectType) || !checkInlinedCloseHandler((ClassFileTryStatement.CatchClause)catchClauses.getFirst(), resource)) {
+            return null;
+        }
+
+        // The calls to 'close()' of the body: each one before an exit, or at the end of the body
+        DefaultList<Statements> containers = new DefaultList<>();
+        DefaultList<Integer> indexes = new DefaultList<>();
+
+        collectInlinedCloses(tryStatements, resource, true, containers, indexes);
+
+        CloseCountVisitor closeCountVisitor = new CloseCountVisitor(resource);
+        tryStatements.accept(closeCountVisitor);
+
+        if (closeCountVisitor.count != containers.size()) {
+            // Another call to 'close()', a call not followed by an exit, ...
+            return null;
+        }
+
+        for (int i = containers.size() - 1; i >= 0; i--) {
+            containers.get(i).remove((int)indexes.get(i));
+        }
+
+        statements.removeLast();
+
+        Expression expression = boe.getRightExpression();
+        CloseCountVisitor referenceVisitor = new CloseCountVisitor(resource);
+        tryStatements.accept(referenceVisitor);
+
+        DefaultList<TryStatement.Resource> resources = new DefaultList<>();
+
+        if ((majorVersion >= 53) && (referenceVisitor.references == 0) && (expression.isLocalVariableReferenceExpression() || expression.isFieldReferenceExpression())) {
+            // 'try (reader)': javac copied the variable
+            localVariableMaker.removeLocalVariable(resource);
+            resources.add(new TryStatement.Resource(null, null, expression));
+        } else {
+            resource.setDeclared(true);
+            resources.add(new TryStatement.Resource((ObjectType)resource.getType(), resource.getName(), expression));
+        }
+
+        return new ClassFileTryStatement(resources, tryStatements, null, null, false, false);
+    }
+
+    /** '[if (r != null)] try { r.close(); } catch (Throwable t2) { t.addSuppressed(t2); } throw t;' */
+    protected static boolean checkInlinedCloseHandler(ClassFileTryStatement.CatchClause catchClause, AbstractLocalVariable resource) {
+        BaseStatement handler = catchClause.getStatements();
+
+        if ((handler == null) || (handler.size() != 2)) {
+            return false;
+        }
+
+        AbstractLocalVariable throwable = catchClause.getLocalVariable();
+        Statement statement = handler.getList().get(0);
+
+        if (statement.isIfStatement()) {
+            if ((resource != getLocalVariable(statement.getCondition())) || (statement.getStatements() == null) || (statement.getStatements().size() != 1)) {
+                return false;
+            }
+            statement = statement.getStatements().getFirst();
+        }
+
+        if (!statement.isTryStatement() || (statement.getFinallyStatements() != null) || !checkThrowable(statement.getCatchClauses())) {
+            return false;
+        }
+
+        BaseStatement closeStatements = statement.getTryStatements();
+
+        if ((closeStatements.size() != 1) || !isClose(closeStatements.getFirst(), resource)) {
+            return false;
+        }
+
+        ClassFileTryStatement.CatchClause cc = (ClassFileTryStatement.CatchClause)statement.getCatchClauses().get(0);
+        BaseStatement suppressStatements = cc.getStatements();
+
+        if ((suppressStatements == null) || (suppressStatements.size() != 1) || !suppressStatements.getFirst().isExpressionStatement()) {
+            return false;
+        }
+
+        Expression expression = suppressStatements.getFirst().getExpression();
+
+        if (!expression.isMethodInvocationExpression() || !((MethodInvocationExpression)expression).getName().equals("addSuppressed") ||
+                !isLocalVariable(expression.getExpression(), throwable) || !isLocalVariable(expression.getParameters().getFirst(), cc.getLocalVariable())) {
+            return false;
+        }
+
+        statement = handler.getList().get(1);
+        return statement.isThrowStatement() && isLocalVariable(statement.getExpression(), throwable);
+    }
+
+    /** 'r.close();' */
+    protected static boolean isClose(Statement statement, AbstractLocalVariable resource) {
+        return statement.isExpressionStatement() && statement.getExpression().isMethodInvocationExpression() &&
+               checkCloseInvocation((MethodInvocationExpression)statement.getExpression(), resource);
+    }
+
+    /** 'r.close();' or 'if (r != null) r.close();' */
+    protected static boolean isInlinedClose(Statement statement, AbstractLocalVariable resource) {
+        if (statement.isIfStatement()) {
+            return (resource == getLocalVariable(statement.getCondition())) && (statement.getStatements() != null) &&
+                   (statement.getStatements().size() == 1) && isClose(statement.getStatements().getFirst(), resource);
+        }
+        return isClose(statement, resource);
+    }
+
+    protected static boolean isLocalVariable(Expression expression, AbstractLocalVariable localVariable) {
+        return expression.isLocalVariableReferenceExpression() && (((ClassFileLocalVariableReferenceExpression)expression).getLocalVariable() == localVariable);
+    }
+
+    protected static boolean isExit(Statement statement) {
+        return statement.isReturnStatement() || statement.isReturnExpressionStatement() || statement.isThrowStatement() ||
+               statement.isBreakStatement() || statement.isContinueStatement();
+    }
+
+    protected static void collectInlinedCloses(BaseStatement statements, AbstractLocalVariable resource, boolean body,
+                                               DefaultList<Statements> containers, DefaultList<Integer> indexes) {
+        if ((statements == null) || !statements.isList()) {
+            if ((statements != null) && (statements.size() == 1)) {
+                collectInlinedCloses(statements.getFirst(), resource, containers, indexes);
+            }
+            return;
+        }
+
+        Statements list = (Statements)statements;
+        int size = list.size();
+
+        for (int i = 0; i < size; i++) {
+            Statement statement = list.get(i);
+
+            if (isInlinedClose(statement, resource)) {
+                boolean lastOfBody = body && (i == size - 1);
+
+                if (lastOfBody || ((i + 1 < size) && isExit(list.get(i + 1)))) {
+                    containers.add(list);
+                    indexes.add(i);
+                }
+            } else if (body && (i == size - 1) && (statement.isIfStatement() || statement.isIfElseStatement())) {
+                // The ends of the branches of the last 'if' are ends of the body
+                collectInlinedCloses(statement.getStatements(), resource, true, containers, indexes);
+                collectInlinedCloses(statement.getElseStatements(), resource, true, containers, indexes);
+            } else {
+                collectInlinedCloses(statement, resource, containers, indexes);
+            }
+        }
+    }
+
+    protected static void collectInlinedCloses(Statement statement, AbstractLocalVariable resource,
+                                               DefaultList<Statements> containers, DefaultList<Integer> indexes) {
+        if (statement.isTryStatement()) {
+            collectInlinedCloses(statement.getTryStatements(), resource, false, containers, indexes);
+            for (TryStatement.CatchClause cc : statement.getCatchClauses() == null ? new DefaultList<TryStatement.CatchClause>() : statement.getCatchClauses()) {
+                collectInlinedCloses(cc.getStatements(), resource, false, containers, indexes);
+            }
+            collectInlinedCloses(statement.getFinallyStatements(), resource, false, containers, indexes);
+        } else {
+            // Some statements are their own 'getStatements()'
+            if (statement.getStatements() != statement) {
+                collectInlinedCloses(statement.getStatements(), resource, false, containers, indexes);
+            }
+            if (statement.getElseStatements() != statement) {
+                collectInlinedCloses(statement.getElseStatements(), resource, false, containers, indexes);
+            }
+        }
+    }
+
+    /** Counts the calls 'r.close()' and the other references to 'r' */
+    protected static class CloseCountVisitor extends AbstractJavaSyntaxVisitor {
+        protected final AbstractLocalVariable resource;
+        protected int count;
+        protected int references;
+
+        public CloseCountVisitor(AbstractLocalVariable resource) {
+            this.resource = resource;
+        }
+
+        @Override
+        public void visit(MethodInvocationExpression expression) {
+            if (checkCloseInvocation(expression, resource)) {
+                count++;
+            }
+            super.visit(expression);
+        }
+
+        @Override
+        public void visit(LocalVariableReferenceExpression expression) {
+            if (isLocalVariable(expression, resource)) {
+                references++;
+            }
+        }
     }
 
     protected static ClassFileTryStatement newTryStatement(
