@@ -633,7 +633,7 @@ public class StatementMaker {
         } else {
             if (majorVersion >= 51) { // (majorVersion >= Java 7)
                 assert jsr == false;
-                statement = TryWithResourcesStatementMaker.make(localVariableMaker, statements, tryStatements, catchClauses, finallyStatements);
+                statement = TryWithResourcesStatementMaker.make(localVariableMaker, statements, tryStatements, catchClauses, finallyStatements, majorVersion);
             }
             if (statement == null) {
                 statement = new ClassFileTryStatement(tryStatements, catchClauses, finallyStatements, jsr, eclipse);

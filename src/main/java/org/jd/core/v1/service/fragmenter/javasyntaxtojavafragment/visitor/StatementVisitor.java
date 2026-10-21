@@ -733,9 +733,16 @@ public class StatementVisitor extends ExpressionVisitor {
 
         BaseType type = resource.getType();
 
+        if (type == null) {
+            // Java 9+: 'try (reader)', an effectively final variable or a final field
+            expression.accept(this);
+            return;
+        }
+
         type.accept(this);
         tokens.add(TextToken.SPACE);
-        tokens.add(newTextToken(resource.getName()));
+        // Java 22+: 'try (var _ = ...)'
+        tokens.add(newTextToken((resource.getName() == null) ? "_" : resource.getName()));
         tokens.add(TextToken.SPACE_EQUAL_SPACE);
         expression.accept(this);
     }
