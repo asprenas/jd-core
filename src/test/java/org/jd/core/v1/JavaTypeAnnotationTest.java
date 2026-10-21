@@ -198,12 +198,15 @@ public class JavaTypeAnnotationTest {
             "package p;\n" +
             "public class Outer {\n" +
             "    public class Inner {}\n" +
+            "    public static class Nested {}\n" +
             "}\n");
         sources.put("p/User",
             "package p;\n" +
             "public class User {\n" +
             "    Outer.@A Inner inner;\n" +
             "    @B Outer.@A Inner both;\n" +
+            "    @B Outer.Inner outerOnly;\n" +
+            "    Outer.@A Nested nested;\n" +
             "}\n");
 
         InMemorySample sample = new InMemorySample(sources, "-g", "--release", "11");
@@ -211,6 +214,8 @@ public class JavaTypeAnnotationTest {
 
         assertTrue(source.contains("Outer.@A Inner inner;"), "inner type");
         assertTrue(source.contains("@B Outer.@A Inner both;"), "outer and inner types");
+        assertTrue(source.contains("@B Outer.Inner outerOnly;"), "outer type only");
+        assertTrue(source.contains("Outer.@A Nested nested;"), "static nested type");
         assertTrue(CompilerUtil.compile("11",
             new JavaSourceFileObject("p/A", sources.get("p/A")),
             new JavaSourceFileObject("p/B", sources.get("p/B")),

@@ -9,6 +9,10 @@ package org.jd.core.v1.service.fragmenter.javasyntaxtojavafragment.visitor;
 
 import org.jd.core.v1.api.loader.Loader;
 import org.jd.core.v1.api.printer.Printer;
+import org.jd.core.v1.model.classfile.ClassFile;
+import org.jd.core.v1.model.classfile.Constants;
+import org.jd.core.v1.model.classfile.attribute.AttributeInnerClasses;
+import org.jd.core.v1.model.classfile.attribute.InnerClass;
 import org.jd.core.v1.model.javafragment.ImportsFragment;
 import org.jd.core.v1.model.javasyntax.AbstractJavaSyntaxVisitor;
 import org.jd.core.v1.model.javasyntax.expression.Expression;
@@ -17,6 +21,7 @@ import org.jd.core.v1.model.javasyntax.reference.AnnotationReferences;
 import org.jd.core.v1.model.javasyntax.reference.TypeAnnotationReferences;
 import org.jd.core.v1.model.javasyntax.type.*;
 import org.jd.core.v1.model.token.*;
+import org.jd.core.v1.service.deserializer.classfile.ClassFileDeserializer;
 import org.jd.core.v1.util.DefaultList;
 
 import java.util.HashMap;
@@ -57,6 +62,7 @@ public class TypeVisitor extends AbstractJavaSyntaxVisitor {
     protected int maxLineNumber = 0;
     protected String currentInternalTypeName;
     protected HashMap<String, TextToken> textTokenCache = new HashMap<>();
+    protected HashMap<String, Boolean> nonStaticInnerTypes = new HashMap<>();
 
     // Type annotations of the declared type being visited: 'typeAnnotationPath' is the JVMS 'type_path' of the visited type
     protected TypeAnnotationReferences typeAnnotationReferences;
@@ -241,14 +247,43 @@ public class TypeVisitor extends AbstractJavaSyntaxVisitor {
         visitAnnotatedDimension(type.getDimension(), path);
     }
 
+    protected boolean isNonStaticInnerType(String internalTypeName) {
+        return nonStaticInnerTypes.computeIfAbsent(internalTypeName, this::loadNonStaticInnerType);
+    }
+
+    /** The 'InnerClasses' attribute of the class file of the inner type gives its flags */
+    protected boolean loadNonStaticInnerType(String internalTypeName) {
+        try {
+            if ((loader != null) && loader.canLoad(internalTypeName)) {
+                ClassFile classFile = new ClassFileDeserializer().loadClassFile(loader, internalTypeName);
+                AttributeInnerClasses attribute = classFile.getAttribute("InnerClasses");
+
+                if (attribute != null) {
+                    for (InnerClass innerClass : attribute.getInnerClasses()) {
+                        if (internalTypeName.equals(innerClass.getInnerTypeName())) {
+                            return (innerClass.getInnerAccessFlags() & Constants.ACC_STATIC) == 0;
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // Not loaded: supposed static
+        }
+
+        return false;
+    }
+
     @Override
     public void visit(InnerObjectType type) {
         String path = typeAnnotationPath;
         String elementPath = elementTypeAnnotationPath(type.getDimension());
-        // A non-static inner type is one 'type_path' step (kind 1) deeper than its outer type: 'Outer.@A Inner' is at '1,0;'.
-        // Without annotation at this step, the inner type is supposed static: '@A Outer.Inner' of a non-static type is not supported.
+        // A non-static inner type is one 'type_path' step (kind 1) deeper than its outer type: 'Outer.@A Inner' is at '1,0;'
+        // and '@A Outer.Inner' at the path of the type. Without annotation at this step, the class file of the inner type
+        // tells if it is static
         String innerPath = elementPath + "1,0;";
-        boolean nonStatic = (typeAnnotationReferences != null) && (typeAnnotationReferences.get(typeAnnotationTarget, typeAnnotationIndex, innerPath) != null);
+        boolean nonStatic = (typeAnnotationReferences != null) &&
+            ((typeAnnotationReferences.get(typeAnnotationTarget, typeAnnotationIndex, innerPath) != null) ||
+             ((typeAnnotationReferences.get(typeAnnotationTarget, typeAnnotationIndex, elementPath) != null) && isNonStaticInnerType(type.getInternalName())));
 
         if (nonStatic || (currentInternalTypeName == null) || (!currentInternalTypeName.equals(type.getInternalName()) && !currentInternalTypeName.equals(type.getOuterType().getInternalName()))) {
             BaseType outerType = type.getOuterType();
