@@ -15,6 +15,7 @@ import org.jd.core.v1.service.converter.classfiletojavasyntax.model.localvariabl
 import org.jd.core.v1.service.converter.classfiletojavasyntax.visitor.*;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 
@@ -385,6 +386,11 @@ public class Java5TypeParametersToTypeArgumentsBinder extends AbstractTypeParame
             }
 
             Type expressionType = exp.getType();
+            // To bind again the returned type of a generic method with the bound arguments
+            BaseTypeParameter rebindTypeParameters = null;
+            BaseTypeArgument rebindTypeArguments = null;
+            BaseType unboundParameterTypes = null;
+            Type unboundType = null;
 
             if (staticMethod || (mie.getTypeParameters() != null) || !mie.getInternalTypeName().equals(internalTypeName)) {
                 TypeMaker.TypeTypes typeTypes = typeMaker.makeTypeTypes(mie.getInternalTypeName());
@@ -431,6 +437,11 @@ public class Java5TypeParametersToTypeArgumentsBinder extends AbstractTypeParame
 
                     Map<String, TypeArgument> bindings = new HashMap<>();
                     boolean partialBinding = populateBindings(bindings, exp, typeParameters, typeArguments, methodTypeParameters, type, t, parameterTypes, parameters);
+
+                    rebindTypeParameters = typeParameters;
+                    rebindTypeArguments = typeArguments;
+                    unboundParameterTypes = parameterTypes;
+                    unboundType = mie.getType();
 
                     mie.setParameterTypes(parameterTypes = bind(bindings, parameterTypes));
                     mie.setType((Type) bind(bindings, mie.getType()));
@@ -479,10 +490,65 @@ public class Java5TypeParametersToTypeArgumentsBinder extends AbstractTypeParame
             this.type = expressionType;
             exp.accept(this);
 
+            if (exp.isMethodInvocationExpression() && isInferredFromArguments((ClassFileMethodInvocationExpression)exp)) {
+                // '.map(String::trim)', not '.<String>map(String::trim)': a receiver is inferred from its arguments
+                ((ClassFileMethodInvocationExpression)exp).setNonWildcardTypeArguments(null);
+            }
+
             bindParameters(parameterTypes, parameters);
+
+            if ((unboundType != null) && (mie.getTypeParameters() != null) && (parameters != null) &&
+                    (TYPE_OBJECT.equals(mie.getType()) || containsGeneric(mie.getType())) && containsGeneric(unboundType)) {
+                // 'stream.collect(Collectors.partitioningBy(...))': 'R' of 'collect' is known once the argument is bound
+                // with the parameter type 'Collector<? super T, A, R>'
+                Map<String, TypeArgument> bindings = new HashMap<>();
+
+                if (!populateBindings(bindings, exp, rebindTypeParameters, rebindTypeArguments, mie.getTypeParameters(), TYPE_OBJECT, null, unboundParameterTypes, parameters)) {
+                    Type rebound = (Type)bind(bindings, unboundType);
+
+                    if (!containsGeneric(rebound) && !TYPE_OBJECT.equals(rebound)) {
+                        mie.setType(rebound);
+                    }
+                }
+            }
 
             mie.setBound(true);
         }
+    }
+
+    /** @return true if each type parameter of the generic method is in the type of a parameter */
+    protected boolean isInferredFromArguments(ClassFileMethodInvocationExpression mie) {
+        if ((mie.getNonWildcardTypeArguments() == null) || (mie.getTypeParameters() == null) || (mie.getParameters() == null)) {
+            return false;
+        }
+
+        TypeMaker.MethodTypes methodTypes = typeMaker.makeMethodTypes(mie.getInternalTypeName(), mie.getName(), mie.getDescriptor());
+
+        if ((methodTypes == null) || (methodTypes.parameterTypes == null)) {
+            return false;
+        }
+
+        HashSet<String> names = new HashSet<>();
+        methodTypes.parameterTypes.accept(new org.jd.core.v1.model.javasyntax.AbstractJavaSyntaxVisitor() {
+            @Override
+            public void visit(GenericType type) {
+                names.add(type.getName());
+            }
+        });
+
+        for (TypeParameter typeParameter : (mie.getTypeParameters().isList() ? (TypeParameters)mie.getTypeParameters() : java.util.Collections.singletonList((TypeParameter)mie.getTypeParameters().getFirst()))) {
+            if (!names.contains(typeParameter.getIdentifier())) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    protected boolean containsGeneric(Type type) {
+        searchInTypeArgumentVisitor.init();
+        type.accept(searchInTypeArgumentVisitor);
+        return searchInTypeArgumentVisitor.containsGeneric();
     }
 
     @Override
