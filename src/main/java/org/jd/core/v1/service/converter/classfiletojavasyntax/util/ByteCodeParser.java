@@ -1650,9 +1650,11 @@ public class ByteCodeParser {
         } else if (count == -1) {
             expression = newPreArithmeticOperatorExpression(lineNumber, "--", expression);
         } else if (count >= 0) {
-            expression = new BinaryOperatorExpression(lineNumber, expression.getType(), expression, "+=", new IntegerConstantExpression(lineNumber, expression.getType(), count), 16);
+            // IINC: int arithmetic. The type of the variable may still be undecided here ('0' is also 'false'):
+            // a snapshot of it would later make the constant 'true' ('i += true')
+            expression = new BinaryOperatorExpression(lineNumber, TYPE_INT, expression, "+=", new IntegerConstantExpression(lineNumber, TYPE_INT, count), 16);
         } else if (count < 0) {
-            expression = new BinaryOperatorExpression(lineNumber, expression.getType(), expression, "-=", new IntegerConstantExpression(lineNumber, expression.getType(), -count), 16);
+            expression = new BinaryOperatorExpression(lineNumber, TYPE_INT, expression, "-=", new IntegerConstantExpression(lineNumber, TYPE_INT, -count), 16);
         } else {
             assert false;
             expression = null;
