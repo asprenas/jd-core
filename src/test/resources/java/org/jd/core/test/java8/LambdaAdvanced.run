@@ -7,3 +7,8 @@ streamPipeline list:a|abcd|null
 intStream array:1|-2|3
 localClassCapture 4
 useFields
+arrayConstructorReference
+comparatorChain
+blockLambda
+mapAll list:a|bb|null fn:length
+mapAll list:x|int:5 fn:upper

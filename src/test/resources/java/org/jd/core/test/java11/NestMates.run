@@ -1,3 +1,6 @@
 # Private access between nest mates
 readInner
 anonymous
+Inner.readOuter
+Inner.writeOuter
+Inner.create

@@ -7,3 +7,4 @@ anonymousType
 intersectionType true
 intersectionType false
 arrayAndCast
+lambdaVar

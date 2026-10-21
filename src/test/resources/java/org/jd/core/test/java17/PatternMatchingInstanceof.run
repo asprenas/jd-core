@@ -19,3 +19,4 @@ arrayPattern abc
 reuseName abc int:1
 reuseName int:1 abc
 reuseName int:1 int:2
+notPattern " x "

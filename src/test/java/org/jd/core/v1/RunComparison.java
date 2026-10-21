@@ -33,17 +33,22 @@ import java.util.function.Supplier;
  * Arguments are separated by blanks and converted to the parameter types of the only method (or constructor)
  * with that name and argument count:
  * <ul>
- *   <li>primitives and their wrappers, String ("null" is null, "\"\"" is the empty string), enum constant names</li>
+ *   <li>primitives and their wrappers, String ("null" is null, "\"\"" is the empty string, "\"a b\"" a string with
+ *       blanks), enum constant names</li>
  *   <li>for an Object (or Number, ...) parameter: "int:5", "long:5", "double:1.5" are boxed values</li>
  *   <li>"list:a|b|int:3": an ArrayList, each element converted like an Object argument ("list:" is empty)</li>
  *   <li>"Point(1,2)": a new instance of the nested class Point of the sample, arguments converted recursively
  *       (no blank inside). "Line(Point(0,0),Point(1,1))" nests</li>
  *   <li>"reader:abc", "in:abc", "out:": a Reader, an InputStream reading "abc", an OutputStream. Closing them prints
  *       "[closed]" ("[closed out:written text]"), the printed text is compared: the resources must be closed once</li>
+ *   <li>"fn:length": a function of the JDK for a Comparator (natural, reverse, length), Function (identity, string,
+ *       length, upper), Predicate (isNull, isEmpty, true) or Supplier (returns the name) parameter</li>
  * </ul>
- * Instance methods are called on a new instance (no-argument constructor).
+ * Instance methods are called on a new instance (no-argument constructor). A non-static inner class gets a new
+ * instance of its enclosing class as outer instance.
  * Results are compared with String.valueOf, thrown exceptions by class name. A returned Supplier is called and
- * its result compared ('supplied ...', recursively), a returned Runnable is run.
+ * its result compared ('supplied ...', recursively), a returned Runnable is run. A returned Comparator, Function,
+ * BiFunction, IntFunction or Predicate is applied to a few strings and integers. Arrays are compared by content.
  */
 public final class RunComparison {
     private static final File RECOMPILED_DIRECTORY = new File("build/test-recompiled");
@@ -120,7 +125,7 @@ public final class RunComparison {
     }
 
     private static String invokeCall(Class<?> sample, String call) {
-        String[] parts = call.split("\\s+");
+        String[] parts = splitCall(call);
         String[] constructorValues = null;
 
         if (parts[0].startsWith("with(") && parts[0].endsWith(")")) {
@@ -132,8 +137,7 @@ public final class RunComparison {
             if (parts[0].equals("new")) {
                 Class<?> type = findNestedClass(sample, parts[1]);
                 String[] values = copyOfRange(parts, 2);
-                Constructor<?> constructor = (Constructor<?>)find(type.getDeclaredConstructors(), null, values.length);
-                return "returned " + describe(newInstance(sample, constructor, values), 0);
+                return "returned " + describe(newInstance(sample, findConstructor(type, values.length), values), 0);
             }
 
             Class<?> type = sample;
@@ -152,12 +156,9 @@ public final class RunComparison {
 
             if (!Modifier.isStatic(method.getModifiers())) {
                 if (constructorValues == null) {
-                    Constructor<?> constructor = type.getDeclaredConstructor();
-                    constructor.setAccessible(true);
-                    target = constructor.newInstance();
-                } else {
-                    target = newInstance(sample, (Constructor<?>)find(type.getDeclaredConstructors(), null, constructorValues.length), constructorValues);
+                    constructorValues = new String[0];
                 }
+                target = newInstance(sample, findConstructor(type, constructorValues.length), constructorValues);
             }
 
             method.setAccessible(true);
@@ -193,9 +194,35 @@ public final class RunComparison {
         return Class.forName(sample.getName() + "$" + path.replace('.', '$'), true, sample.getClassLoader());
     }
 
+    /** The constructor with 'argumentCount' arguments, plus the outer instance of a non-static inner class */
+    private static Constructor<?> findConstructor(Class<?> type, int argumentCount) {
+        return (Constructor<?>)find(type.getDeclaredConstructors(), null, isInnerClass(type) ? argumentCount + 1 : argumentCount);
+    }
+
+    private static boolean isInnerClass(Class<?> type) {
+        return type.isMemberClass() && !Modifier.isStatic(type.getModifiers());
+    }
+
+    /** Arguments of a non-static inner class: the outer instance is a new instance of the enclosing class */
     private static Object newInstance(Class<?> sample, Constructor<?> constructor, String[] values) throws Exception {
+        Class<?> type = constructor.getDeclaringClass();
+        Class<?>[] types = constructor.getParameterTypes();
+        Object[] arguments;
+
         constructor.setAccessible(true);
-        return constructor.newInstance(convertArguments(sample, constructor.getParameterTypes(), values));
+
+        if (isInnerClass(type)) {
+            Class<?> outer = type.getEnclosingClass();
+            Object[] others = convertArguments(sample, java.util.Arrays.copyOfRange(types, 1, types.length), values);
+
+            arguments = new Object[types.length];
+            arguments[0] = newInstance(sample, findConstructor(outer, 0), new String[0]);
+            System.arraycopy(others, 0, arguments, 1, others.length);
+        } else {
+            arguments = convertArguments(sample, types, values);
+        }
+
+        return constructor.newInstance(arguments);
     }
 
     private static Object[] convertArguments(Class<?> sample, Class<?>[] types, String[] values) throws Exception {
@@ -209,6 +236,7 @@ public final class RunComparison {
     }
 
     /** Results of lambdas are compared by behavior: their 'toString' contains generated class names */
+    @SuppressWarnings("unchecked")
     private static String describe(Object result, int depth) {
         if ((depth < 3) && (result instanceof Supplier)) {
             return "supplied " + describe(((Supplier<?>)result).get(), depth + 1);
@@ -217,10 +245,53 @@ public final class RunComparison {
             ((Runnable)result).run();
             return "ran";
         }
+        if ((depth < 3) && (result instanceof java.util.Comparator)) {
+            return "comparator " + applyToSamples(v -> Integer.signum(((java.util.Comparator<Object>)result).compare(v[0], v[1])), true);
+        }
+        if ((depth < 3) && (result instanceof java.util.function.Function)) {
+            return "function " + applyToSamples(v -> describe(((java.util.function.Function<Object, ?>)result).apply(v[0]), depth + 1), false);
+        }
+        if ((depth < 3) && (result instanceof java.util.function.BiFunction)) {
+            return "bifunction " + applyToSamples(v -> describe(((java.util.function.BiFunction<Object, Object, ?>)result).apply(v[0], v[1]), depth + 1), true);
+        }
+        if ((depth < 3) && (result instanceof java.util.function.IntFunction)) {
+            return "intfunction " + applyToSamples(v -> describe(((java.util.function.IntFunction<?>)result).apply((v[0] instanceof Integer) ? (Integer)v[0] : -1), depth + 1), false);
+        }
+        if ((result != null) && result.getClass().isArray()) {
+            // 'int[]' and 'Object[]' strings contain a hash code
+            return java.util.Arrays.deepToString(new Object[] { result });
+        }
+        if ((depth < 3) && (result instanceof java.util.function.Predicate)) {
+            return "predicate " + applyToSamples(v -> ((java.util.function.Predicate<Object>)result).test(v[0]), false);
+        }
         if ((result != null) && (depth < 3) && isSampleClassWithoutToString(result.getClass())) {
             return describeFields(result, depth);
         }
         return String.valueOf(result);
+    }
+
+    /**
+     * A returned function is applied to strings, then to integers (its parameter type is unknown): '[a->A, b->B]'.
+     * A value it can not take gives the exception class name.
+     */
+    private static String applyToSamples(java.util.function.Function<Object[], Object> function, boolean pairs) {
+        Object[][] inputs = pairs ?
+            new Object[][] { { "a", "b" }, { "b", "a" }, { "ab", "ab" }, { 1, 2 }, { 2, 1 }, { 3, 3 } } :
+            new Object[][] { { "" }, { "ab" }, { 0 }, { 5 }, { null } };
+        StringBuilder sb = new StringBuilder("[");
+
+        for (Object[] input : inputs) {
+            if (sb.length() > 1) {
+                sb.append(", ");
+            }
+            try {
+                sb.append(function.apply(input));
+            } catch (RuntimeException e) {
+                sb.append(e.getClass().getSimpleName());
+            }
+        }
+
+        return sb.append(']').toString();
     }
 
     /** A class of the sample (not of the JDK) that inherits 'Object.toString': its string contains a hash code */
@@ -322,8 +393,7 @@ public final class RunComparison {
             // 'Point(1,2)': a nested class of the sample
             Class<?> nested = findNestedClass(sample, value.substring(0, open));
             String[] values = splitArguments(value.substring(open + 1, value.length() - 1));
-            Constructor<?> constructor = (Constructor<?>)find(nested.getDeclaredConstructors(), null, values.length);
-            return newInstance(sample, constructor, values);
+            return newInstance(sample, findConstructor(nested, values.length), values);
         }
         if (value.matches("[A-Z]\\w*(\\.[A-Z]\\w*)*\\.[A-Z][A-Z0-9_]*")) {
             // 'Color.RED': a constant of a nested enum of the sample
@@ -348,10 +418,70 @@ public final class RunComparison {
         if (value.equals("out:") && type.isAssignableFrom(ClosingOutputStream.class)) {
             return new ClosingOutputStream();
         }
-        if (value.equals("\"\"")) {
-            return "";
+        if (value.startsWith("fn:")) {
+            return function(type, value.substring(3));
+        }
+        if ((value.length() >= 2) && value.startsWith("\"") && value.endsWith("\"")) {
+            // '"a b"': a string with blanks, '""' the empty string
+            return value.substring(1, value.length() - 1);
         }
         return value;
+    }
+
+    /** 'fn:name': a function of the JDK for a functional interface parameter */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static Object function(Class<?> type, String name) {
+        if (type == java.util.Comparator.class) {
+            switch (name) {
+                case "natural": return java.util.Comparator.naturalOrder();
+                case "reverse": return java.util.Comparator.reverseOrder();
+                case "length": return java.util.Comparator.comparingInt((Object o) -> String.valueOf(o).length());
+            }
+        } else if (type == java.util.function.Function.class) {
+            switch (name) {
+                case "identity": return java.util.function.Function.identity();
+                case "string": return (java.util.function.Function<Object, String>)String::valueOf;
+                case "length": return (java.util.function.Function<Object, Integer>)o -> String.valueOf(o).length();
+                case "upper": return (java.util.function.Function<Object, String>)o -> String.valueOf(o).toUpperCase();
+            }
+        } else if (type == java.util.function.Predicate.class) {
+            switch (name) {
+                case "isNull": return (java.util.function.Predicate<Object>)java.util.Objects::isNull;
+                case "isEmpty": return (java.util.function.Predicate<Object>)o -> String.valueOf(o).isEmpty();
+                case "true": return (java.util.function.Predicate<Object>)o -> true;
+            }
+        } else if (type == java.util.function.Supplier.class) {
+            return (Supplier<Object>)() -> name;
+        }
+        throw new IllegalArgumentException("no function " + name + " for " + type.getName());
+    }
+
+    /** Blanks separate the arguments, except in '"a b"' */
+    private static String[] splitCall(String call) {
+        List<String> parts = new ArrayList<>();
+        StringBuilder part = new StringBuilder();
+        boolean quoted = false;
+
+        for (int i = 0; i < call.length(); i++) {
+            char c = call.charAt(i);
+
+            if (c == '"') {
+                quoted = !quoted;
+                part.append(c);
+            } else if (Character.isWhitespace(c) && !quoted) {
+                if (part.length() > 0) {
+                    parts.add(part.toString());
+                    part.setLength(0);
+                }
+            } else {
+                part.append(c);
+            }
+        }
+
+        if (part.length() > 0) {
+            parts.add(part.toString());
+        }
+        return parts.toArray(new String[0]);
     }
 
     private static final class ClosingReader extends java.io.StringReader {
