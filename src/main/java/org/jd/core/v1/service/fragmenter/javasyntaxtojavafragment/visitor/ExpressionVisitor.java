@@ -305,7 +305,8 @@ public class ExpressionVisitor extends TypeVisitor {
         } else {
             BaseType type = expression.getInstanceOfType();
 
-            type.accept(this);
+            // 'o instanceof @A String'
+            visitAnnotatedType(type, expression.getTypeAnnotationReferences(), TypeAnnotationReferences.INSTANCEOF, 0, "");
         }
     }
 
@@ -589,7 +590,8 @@ public class ExpressionVisitor extends TypeVisitor {
 
         BaseType type = objectType;
 
-        type.accept(this);
+        // 'new @A Foo()'
+        visitAnnotatedType(type, expression.getTypeAnnotationReferences(), TypeAnnotationReferences.NEW, 0, "");
         tokens.add(StartBlockToken.START_PARAMETERS_BLOCK);
 
         BaseExpression parameters = expression.getParameters();

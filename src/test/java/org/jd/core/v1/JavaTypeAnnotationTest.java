@@ -77,4 +77,37 @@ public class JavaTypeAnnotationTest {
             new JavaSourceFileObject("p/A", sources.get("p/A")),
             new JavaSourceFileObject("p/Body", source)), "the decompiled source does not recompile");
     }
+
+    /** Remaining item C3: 'instanceof' (0x43) and 'new' (0x44) */
+    @Test
+    public void instanceOfAndNew() throws Exception {
+        Map<String, String> sources = new LinkedHashMap<>();
+        sources.put("p/A",
+            "package p;\n" +
+            "import java.lang.annotation.*;\n" +
+            "@Retention(RetentionPolicy.RUNTIME) @Target(ElementType.TYPE_USE) public @interface A {}\n");
+        sources.put("p/Body",
+            "package p;\n" +
+            "import java.util.*;\n" +
+            "public class Body {\n" +
+            "    public boolean test(Object o) {\n" +
+            "        return o instanceof @A String;\n" +
+            "    }\n" +
+            "    public List<String> make() {\n" +
+            "        List<String> list = new @A ArrayList<>();\n" +
+            "        list.add(new @A StringBuilder(\"x\").toString());\n" +
+            "        return list;\n" +
+            "    }\n" +
+            "}\n");
+
+        InMemorySample sample = new InMemorySample(sources, "-g", "--release", "11");
+        String source = sample.decompile("p/Body", Collections.emptyMap());
+
+        assertTrue(source.contains("o instanceof @A String"), "instanceof");
+        assertTrue(source.contains("new @A ArrayList<>()"), "new with diamond");
+        assertTrue(source.contains("new @A StringBuilder(\"x\")"), "new");
+        assertTrue(CompilerUtil.compile("11",
+            new JavaSourceFileObject("p/A", sources.get("p/A")),
+            new JavaSourceFileObject("p/Body", source)), "the decompiled source does not recompile");
+    }
 }

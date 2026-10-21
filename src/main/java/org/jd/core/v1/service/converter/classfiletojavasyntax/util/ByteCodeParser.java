@@ -69,6 +69,7 @@ public class ByteCodeParser {
 
     protected Map<Integer, TypeAnnotationReferences> castTypeAnnotations;
     protected Map<Integer, TypeAnnotationReferences> upcastTypeAnnotations;
+    protected Map<Integer, TypeAnnotationReferences> instructionTypeAnnotations; // 'instanceof' and 'new', by offset
 
     public ByteCodeParser(
             TypeMaker typeMaker, LocalVariableMaker localVariableMaker, ClassFile classFile,
@@ -90,6 +91,7 @@ public class ByteCodeParser {
 
         this.castTypeAnnotations = makeCastTypeAnnotations(typeMaker, comd.getMethod(), true);
         this.upcastTypeAnnotations = makeCastTypeAnnotations(typeMaker, comd.getMethod(), false);
+        this.instructionTypeAnnotations = makeInstructionTypeAnnotations(typeMaker, comd.getMethod());
     }
 
     /**
@@ -167,6 +169,36 @@ public class ByteCodeParser {
         return map;
     }
 
+    /** Type annotations of the 'instanceof' (0x43) and 'new' (0x44) instructions, by offset */
+    protected static Map<Integer, TypeAnnotationReferences> makeInstructionTypeAnnotations(TypeMaker typeMaker, Method method) {
+        AttributeCode code = method.getAttribute("Code");
+        Map<Integer, TypeAnnotationReferences> map = null;
+
+        if (code != null) {
+            AnnotationConverter annotationConverter = new AnnotationConverter(typeMaker);
+
+            for (String name : new String[] { "RuntimeVisibleTypeAnnotations", "RuntimeInvisibleTypeAnnotations" }) {
+                AttributeTypeAnnotations attribute = code.getAttribute(name);
+
+                if (attribute != null) {
+                    for (TypeAnnotation ta : attribute.getTypeAnnotations()) {
+                        int targetType = ta.getTargetType();
+
+                        if ((targetType == TypeAnnotationReferences.INSTANCEOF) || (targetType == TypeAnnotationReferences.NEW)) {
+                            if (map == null) {
+                                map = new HashMap<>();
+                            }
+                            map.computeIfAbsent(ta.getTargetIndex(), k -> new TypeAnnotationReferences())
+                               .add(targetType, 0, ta.getTypePath(), annotationConverter.convertTypeAnnotation(ta));
+                        }
+                    }
+                }
+            }
+        }
+
+        return map;
+    }
+
     @SuppressWarnings("unchecked")
     public void parse(BasicBlock basicBlock, Statements statements, DefaultStack<Expression> stack) {
         ControlFlowGraph cfg = basicBlock.getControlFlowGraph();
@@ -179,6 +211,7 @@ public class ByteCodeParser {
         boolean syntheticFlag = (method.getAccessFlags() & FLAG_SYNTHETIC) != 0;
 
         Expression indexRef, arrayRef, valueRef, expression1, expression2, expression3;
+        TypeAnnotationReferences references;
         Type type1, type2, type3;
         ConstantMemberRef constantMemberRef;
         ConstantNameAndType constantNameAndType;
@@ -903,8 +936,13 @@ public class ByteCodeParser {
                     offset += 2; // Skip 2 bytes
                     break;
                 case 187: // NEW
+                    references = (instructionTypeAnnotations == null) ? null : instructionTypeAnnotations.get(offset);
                     typeName = constants.getConstantTypeName( ((code[++offset] & 255) << 8) | (code[++offset] & 255) );
-                    stack.push(newNewExpression(lineNumber, typeName));
+                    expression1 = newNewExpression(lineNumber, typeName);
+                    if ((references != null) && expression1.isNewExpression()) {
+                        ((NewExpression) expression1).setTypeAnnotationReferences(references);
+                    }
+                    stack.push(expression1);
                     break;
                 case 188: // NEWARRAY
                     type1 = PrimitiveTypeUtil.getPrimitiveTypeFromTag( (code[++offset] & 255) ).createType(1);
@@ -956,12 +994,15 @@ public class ByteCodeParser {
                     }
                     break;
                 case 193: // INSTANCEOF
+                    references = (instructionTypeAnnotations == null) ? null : instructionTypeAnnotations.get(offset);
                     typeName = constants.getConstantTypeName( ((code[++offset] & 255) << 8) | (code[++offset] & 255) );
                     type1 = typeMaker.makeFromDescriptorOrInternalTypeName(typeName);
                     if (type1 == null) {
                         type1 = PrimitiveTypeUtil.getPrimitiveTypeFromDescriptor(typeName);
                     }
-                    stack.push(new InstanceOfExpression(lineNumber, stack.pop(), type1));
+                    InstanceOfExpression instanceOfExpression = new InstanceOfExpression(lineNumber, stack.pop(), type1);
+                    instanceOfExpression.setTypeAnnotationReferences(references);
+                    stack.push(instanceOfExpression);
                     break;
                 case 194: // MONITORENTER
                     statements.add(new ClassFileMonitorEnterStatement(stack.pop()));
