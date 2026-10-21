@@ -14,3 +14,4 @@ typeOnly long:1
 multiplePatterns int:1
 multiplePatterns long:1
 multiplePatterns abc
+unusedLambdaParameter
