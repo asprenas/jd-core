@@ -15,6 +15,8 @@ import org.jd.core.v1.model.processor.Processor;
 import org.jd.core.v1.service.fragmenter.javasyntaxtojavafragment.visitor.CompilationUnitVisitor;
 import org.jd.core.v1.service.fragmenter.javasyntaxtojavafragment.visitor.SearchImportsVisitor;
 
+import java.util.Map;
+
 /**
  * Convert a Java syntax model to a list of fragments.<br><br>
  *
@@ -35,6 +37,9 @@ public class JavaSyntaxToJavaFragmentProcessor implements Processor {
         message.setHeader("maxLineNumber", importsVisitor.getMaxLineNumber());
 
         CompilationUnitVisitor visitor = new CompilationUnitVisitor(loader, mainInternalTypeName, majorVersion, importsFragment);
+        Map<String, Object> configuration = message.getHeader("configuration");
+        Object textBlocks = (configuration == null) ? null : configuration.get("textBlocks");
+        visitor.setTextBlocksEnabled((textBlocks != null) && "true".equals(textBlocks.toString()));
         visitor.visit(compilationUnit);
         message.setBody(visitor.getFragments());
     }
