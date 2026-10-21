@@ -111,6 +111,35 @@ public class JavaTypeAnnotationTest {
             new JavaSourceFileObject("p/Body", source)), "the decompiled source does not recompile");
     }
 
+    /** Remaining item C4: receiver parameters (0x15) */
+    @Test
+    public void receiverParameter() throws Exception {
+        Map<String, String> sources = new LinkedHashMap<>();
+        sources.put("p/A",
+            "package p;\n" +
+            "import java.lang.annotation.*;\n" +
+            "@Retention(RetentionPolicy.RUNTIME) @Target(ElementType.TYPE_USE) public @interface A {}\n");
+        sources.put("p/Receiver",
+            "package p;\n" +
+            "public class Receiver {\n" +
+            "    public int none(@A Receiver this) {\n" +
+            "        return 1;\n" +
+            "    }\n" +
+            "    public int one(@A Receiver this, int i) {\n" +
+            "        return i;\n" +
+            "    }\n" +
+            "}\n");
+
+        InMemorySample sample = new InMemorySample(sources, "-g", "--release", "11");
+        String source = sample.decompile("p/Receiver", Collections.emptyMap());
+
+        assertTrue(source.contains("none(@A Receiver this)"), "receiver only");
+        assertTrue(source.contains("one(@A Receiver this, int i)"), "receiver and parameter");
+        assertTrue(CompilerUtil.compile("11",
+            new JavaSourceFileObject("p/A", sources.get("p/A")),
+            new JavaSourceFileObject("p/Receiver", source)), "the decompiled source does not recompile");
+    }
+
     /** Remaining item C3: constructor (0x45) and method (0x46) references */
     @Test
     public void methodReferences() throws Exception {
