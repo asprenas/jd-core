@@ -22,6 +22,17 @@ public class TypeAnnotationReferences {
     public static final int METHOD_RETURN           = 0x14;
     public static final int METHOD_FORMAL_PARAMETER = 0x16;
     public static final int THROWS                  = 0x17;
+    // 'index' 65535 for 'extends', or the index of the interface
+    public static final int SUPERTYPE               = 0x10;
+    // 'index': (index of the type parameter) * 256 + index of the bound in the printed list
+    public static final int CLASS_TYPE_PARAMETER_BOUND  = 0x11;
+    public static final int METHOD_TYPE_PARAMETER_BOUND = 0x12;
+    // JVMS 'target_type' of the method body
+    public static final int LOCAL_VARIABLE          = 0x40;
+    public static final int RESOURCE_VARIABLE       = 0x41;
+    public static final int CAST                    = 0x47;
+
+    public static final int EXTENDS_INDEX = 65535;
 
     protected HashMap<String, AnnotationReferences<AnnotationReference>> map = new HashMap<>();
 

@@ -7,6 +7,7 @@
 
 package org.jd.core.v1.model.javasyntax.declaration;
 
+import org.jd.core.v1.model.javasyntax.reference.TypeAnnotationReferences;
 public class LocalVariableDeclarator implements BaseLocalVariableDeclarator {
     protected int lineNumber;
     protected String name;
@@ -26,6 +27,11 @@ public class LocalVariableDeclarator implements BaseLocalVariableDeclarator {
         this.lineNumber = lineNumber;
         this.name = name;
         this.variableInitializer = variableInitializer;
+    }
+
+    /** Type annotations of the declared type ('localvar_target'), or null */
+    public TypeAnnotationReferences getTypeAnnotationReferences() {
+        return null;
     }
 
     public String getName() {

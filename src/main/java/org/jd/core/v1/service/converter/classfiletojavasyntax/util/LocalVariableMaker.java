@@ -14,6 +14,7 @@ import org.jd.core.v1.model.classfile.attribute.*;
 import org.jd.core.v1.model.javasyntax.declaration.BaseFormalParameter;
 import org.jd.core.v1.model.javasyntax.declaration.FormalParameters;
 import org.jd.core.v1.model.javasyntax.reference.BaseAnnotationReference;
+import org.jd.core.v1.model.javasyntax.reference.TypeAnnotationReferences;
 import org.jd.core.v1.model.javasyntax.statement.Statements;
 import org.jd.core.v1.model.javasyntax.type.*;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.declaration.ClassFileConstructorOrMethodDeclaration;
@@ -169,6 +170,38 @@ public class LocalVariableMaker {
         localVariableCache = localVariableSet.initialize(currentFrame);
     }
 
+    /** 'localvar_target' type annotations: a range of the annotation is the LocalVariableTable range of the variable */
+    protected void initTypeAnnotations(AttributeCode code) {
+        AnnotationConverter annotationConverter = null;
+
+        for (String name : new String[] { "RuntimeVisibleTypeAnnotations", "RuntimeInvisibleTypeAnnotations" }) {
+            AttributeTypeAnnotations attribute = code.getAttribute(name);
+
+            if (attribute != null) {
+                for (TypeAnnotation ta : attribute.getTypeAnnotations()) {
+                    int[] ranges = ta.getLocalVariableRanges();
+
+                    if ((ranges != null) && (ta.getTargetType() == TypeAnnotationReferences.LOCAL_VARIABLE)) {
+                        for (int i = 0; i < ranges.length; i += 3) {
+                            AbstractLocalVariable lv = localVariableSet.get(ranges[i+2], ranges[i]);
+
+                            if ((lv != null) && (lv.getFromOffset() == ranges[i])) {
+                                if (annotationConverter == null) {
+                                    annotationConverter = new AnnotationConverter(typeMaker);
+                                }
+                                if (lv.getTypeAnnotationReferences() == null) {
+                                    lv.setTypeAnnotationReferences(new TypeAnnotationReferences());
+                                }
+                                lv.getTypeAnnotationReferences().add(TypeAnnotationReferences.LOCAL_VARIABLE, -1, ta.getTypePath(), annotationConverter.convertTypeAnnotation(ta));
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     protected void initLocalVariablesFromAttributes(Method method) {
         AttributeCode code = method.getAttribute("Code");
 
@@ -202,6 +235,8 @@ public class LocalVariableMaker {
                     names.add(name);
                 }
             }
+
+            initTypeAnnotations(code);
 
             AttributeLocalVariableTypeTable localVariableTypeTable = code.getAttribute("LocalVariableTypeTable");
 

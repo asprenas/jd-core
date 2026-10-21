@@ -309,7 +309,7 @@ public class ConvertClassFileProcessor implements Processor {
     protected TypeAnnotationReferences convertTypeAnnotationReferences(AnnotationConverter converter, ClassFile classFile) {
         return converter.convert(
                 classFile.getAttribute("RuntimeVisibleTypeAnnotations"), classFile.getAttribute("RuntimeInvisibleTypeAnnotations"),
-                null, null);
+                null, null, AnnotationConverter.getTypeParameterClassBounds(getSignature(classFile.getAttribute("Signature"))));
     }
 
     protected TypeAnnotationReferences convertTypeAnnotationReferences(AnnotationConverter converter, Field field) {
@@ -323,7 +323,12 @@ public class ConvertClassFileProcessor implements Processor {
         return converter.convert(
                 method.getAttribute("RuntimeVisibleTypeAnnotations"), method.getAttribute("RuntimeInvisibleTypeAnnotations"),
                 new Annotations[] { method.getAttribute("RuntimeVisibleAnnotations"), method.getAttribute("RuntimeInvisibleAnnotations") },
-                new AttributeParameterAnnotations[] { method.getAttribute("RuntimeVisibleParameterAnnotations"), method.getAttribute("RuntimeInvisibleParameterAnnotations") });
+                new AttributeParameterAnnotations[] { method.getAttribute("RuntimeVisibleParameterAnnotations"), method.getAttribute("RuntimeInvisibleParameterAnnotations") },
+                AnnotationConverter.getTypeParameterClassBounds(getSignature(method.getAttribute("Signature"))));
+    }
+
+    protected static String getSignature(AttributeSignature attribute) {
+        return (attribute == null) ? null : attribute.getSignature();
     }
 
     protected ExpressionVariableInitializer convertFieldInitializer(Field field, Type typeField) {

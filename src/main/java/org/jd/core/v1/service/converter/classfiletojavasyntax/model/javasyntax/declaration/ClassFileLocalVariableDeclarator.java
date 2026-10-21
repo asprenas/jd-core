@@ -7,6 +7,7 @@
 
 package org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.declaration;
 
+import org.jd.core.v1.model.javasyntax.reference.TypeAnnotationReferences;
 import org.jd.core.v1.model.javasyntax.declaration.LocalVariableDeclarator;
 import org.jd.core.v1.model.javasyntax.declaration.VariableInitializer;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.model.localvariable.AbstractLocalVariable;
@@ -31,6 +32,11 @@ public class ClassFileLocalVariableDeclarator extends LocalVariableDeclarator im
 
     public void setName(String name) {
         localVariable.setName(name);
+    }
+
+    @Override
+    public TypeAnnotationReferences getTypeAnnotationReferences() {
+        return localVariable.getTypeAnnotationReferences();
     }
 
     @Override

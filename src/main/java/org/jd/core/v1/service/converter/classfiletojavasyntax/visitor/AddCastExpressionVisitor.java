@@ -414,7 +414,8 @@ public class AddCastExpressionVisitor extends AbstractJavaSyntaxVisitor {
                 }
             }
 
-            if (expression.isCastExpression()) {
+            if (expression.isCastExpression() && (((CastExpression)expression).getTypeAnnotationReferences() == null)) {
+                // An annotated cast '(@A String)o' is kept
                 Type ceExpressionType = expression.getExpression().getType();
 
                 if (type.isObjectType() && ceExpressionType.isObjectType()) {

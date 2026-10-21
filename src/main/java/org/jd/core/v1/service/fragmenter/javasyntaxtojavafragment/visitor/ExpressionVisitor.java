@@ -15,6 +15,7 @@ import org.jd.core.v1.model.javasyntax.declaration.BaseFormalParameter;
 import org.jd.core.v1.model.javasyntax.declaration.BodyDeclaration;
 import org.jd.core.v1.model.javasyntax.declaration.FormalParameter;
 import org.jd.core.v1.model.javasyntax.expression.*;
+import org.jd.core.v1.model.javasyntax.reference.TypeAnnotationReferences;
 import org.jd.core.v1.model.javasyntax.statement.BaseStatement;
 import org.jd.core.v1.model.javasyntax.type.*;
 import org.jd.core.v1.model.token.*;
@@ -164,7 +165,8 @@ public class ExpressionVisitor extends TypeVisitor {
 
             BaseType type = expression.getType();
 
-            type.accept(this);
+            // '(@A String)o'
+            visitAnnotatedType(type, expression.getTypeAnnotationReferences(), TypeAnnotationReferences.CAST, 0, "");
             tokens.add(TextToken.RIGHTROUNDBRACKET);
         }
 

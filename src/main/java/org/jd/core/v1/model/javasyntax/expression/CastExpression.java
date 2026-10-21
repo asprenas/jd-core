@@ -7,11 +7,13 @@
 
 package org.jd.core.v1.model.javasyntax.expression;
 
+import org.jd.core.v1.model.javasyntax.reference.TypeAnnotationReferences;
 import org.jd.core.v1.model.javasyntax.type.Type;
 
 public class CastExpression extends AbstractLineNumberTypeExpression {
     protected Expression expression;
     protected boolean explicit;
+    protected TypeAnnotationReferences typeAnnotationReferences;
 
     public CastExpression(Type type, Expression expression) {
         super(type);
@@ -38,6 +40,15 @@ public class CastExpression extends AbstractLineNumberTypeExpression {
 
     public void setExpression(Expression expression) {
         this.expression = expression;
+    }
+
+    /** Type annotations of the cast type ('(@A String)o'), or null */
+    public TypeAnnotationReferences getTypeAnnotationReferences() {
+        return typeAnnotationReferences;
+    }
+
+    public void setTypeAnnotationReferences(TypeAnnotationReferences typeAnnotationReferences) {
+        this.typeAnnotationReferences = typeAnnotationReferences;
     }
 
     public boolean isExplicit() {
