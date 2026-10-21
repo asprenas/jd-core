@@ -29,6 +29,7 @@ public class UpdateJavaSyntaxTreeStep2Visitor extends AbstractJavaSyntaxVisitor 
     protected InitInnerClassVisitor.UpdateNewExpressionVisitor initInnerClassStep2Visitor;
     protected AddCastExpressionVisitor addCastExpressionVisitor;
     protected static final RemoveRedundantCastVisitor REMOVE_REDUNDANT_CAST_VISITOR = new RemoveRedundantCastVisitor();
+    protected static final MoveDeclarationIntoSwitchBlockVisitor MOVE_DECLARATION_INTO_SWITCH_BLOCK_VISITOR = new MoveDeclarationIntoSwitchBlockVisitor();
     protected UpdateSealedDeclarationVisitor updateSealedDeclarationVisitor;
 
     protected TypeDeclaration typeDeclaration;
@@ -75,6 +76,9 @@ public class UpdateJavaSyntaxTreeStep2Visitor extends AbstractJavaSyntaxVisitor 
 
             // Remove the casts of the expressions bound to the cast type
             REMOVE_REDUNDANT_CAST_VISITOR.visit(declaration);
+
+            // Declare the variables of one switch block in the block
+            MOVE_DECLARATION_INTO_SWITCH_BLOCK_VISITOR.visit(declaration);
 
             // Autoboxing
             AUTOBOXING_VISITOR.visit(declaration);
