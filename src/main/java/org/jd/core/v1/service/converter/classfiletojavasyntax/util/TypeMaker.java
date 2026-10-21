@@ -67,6 +67,11 @@ public class TypeMaker {
     private ClassPathLoader classPathLoader = new ClassPathLoader();
     private Loader loader;
 
+    /** The loader of the decompiled classes and of their dependencies */
+    public Loader getLoader() {
+        return loader;
+    }
+
     public TypeMaker(Loader loader) {
         this.loader = loader;
 

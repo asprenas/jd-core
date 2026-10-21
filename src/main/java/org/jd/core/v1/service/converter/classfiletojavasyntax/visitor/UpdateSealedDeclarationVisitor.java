@@ -7,6 +7,7 @@
 
 package org.jd.core.v1.service.converter.classfiletojavasyntax.visitor;
 
+import org.jd.core.v1.api.loader.Loader;
 import org.jd.core.v1.model.classfile.ClassFile;
 import org.jd.core.v1.model.classfile.attribute.AttributePermittedSubclasses;
 import org.jd.core.v1.model.javasyntax.declaration.InterfaceDeclaration;
@@ -15,6 +16,9 @@ import org.jd.core.v1.model.javasyntax.type.Types;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.declaration.ClassFileBodyDeclaration;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.declaration.ClassFileTypeDeclaration;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.util.TypeMaker;
+import org.jd.core.v1.service.deserializer.classfile.ClassFileDeserializer;
+
+import java.util.HashMap;
 
 import static org.jd.core.v1.model.classfile.Constants.ACC_ENUM;
 import static org.jd.core.v1.model.classfile.Constants.ACC_FINAL;
@@ -26,6 +30,8 @@ import static org.jd.core.v1.model.classfile.Constants.ACC_FINAL;
  */
 public class UpdateSealedDeclarationVisitor {
     protected TypeMaker typeMaker;
+    // Sealed types of the other class files, by internal name
+    protected HashMap<String, Boolean> sealedTypes = new HashMap<>();
 
     public UpdateSealedDeclarationVisitor(TypeMaker typeMaker) {
         this.typeMaker = typeMaker;
@@ -79,7 +85,29 @@ public class UpdateSealedDeclarationVisitor {
         }
 
         ClassFile classFile = findClassFile(bodyDeclaration, internalTypeName);
-        return (classFile != null) && (classFile.getAttribute("PermittedSubclasses") != null);
+
+        if (classFile != null) {
+            return classFile.getAttribute("PermittedSubclasses") != null;
+        }
+
+        // A super type of another class file: 'final class Circle implements Shape' and 'sealed interface Shape' in
+        // two files. Without it, a subclass that is not 'final' is not written 'non-sealed' and does not compile
+        return sealedTypes.computeIfAbsent(internalTypeName, this::loadSealed);
+    }
+
+    protected boolean loadSealed(String internalTypeName) {
+        Loader loader = typeMaker.getLoader();
+
+        try {
+            if ((loader != null) && loader.canLoad(internalTypeName)) {
+                ClassFile classFile = new ClassFileDeserializer().loadClassFile(loader, internalTypeName);
+                return classFile.getAttribute("PermittedSubclasses") != null;
+            }
+        } catch (Exception e) {
+            // Not loaded: not known as sealed
+        }
+
+        return false;
     }
 
     protected static ClassFile findClassFile(ClassFileBodyDeclaration bodyDeclaration, String internalTypeName) {
