@@ -1,0 +1,7 @@
+# Enum: constants, values, valueOf, main
+Planet.main array:175
+Planet.valueOf EARTH
+Planet.values
+Day.values
+Day.valueOf FRIDAY
+Day.valueOf NOPE
