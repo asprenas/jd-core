@@ -218,6 +218,29 @@ public class JavaLanguageVersionTest {
         assertTrue(differences.isEmpty(), String.join("\n", differences));
     }
 
+    /** Phase 5-5: 'repeatableAnnotations' configuration, a container of repeatable annotations is unfolded */
+    @ParameterizedTest(name = "java8 AnnotationsJava8{0} repeatableAnnotations=true")
+    @ValueSource(strings = {"", "-javac" + NEWEST_JDK})
+    public void repeatableAnnotationsConfiguration(String variant) throws Exception {
+        assumeTrue(parseSelection(System.getenv("JDCORE_SAMPLES")).contains(8), "java8 samples not selected");
+
+        String internalName = "org/jd/core/test/java8/AnnotationsJava8";
+        Loader loader = loader("/zip/data-java-language-8" + variant + ".zip");
+        String source = decompile(loader, new PlainTextPrinter(), internalName, Collections.singletonMap("repeatableAnnotations", "true"));
+
+        System.out.println("- - - - - - - - ");
+        System.out.println(source);
+        System.out.println("- - - - - - - - ");
+
+        assertTrue(source.matches("(?s).*@Tag\\(\"a\"\\)\\s+(/\\*[ 0-9:]+\\*/\\s*)?@Tag\\(\"b\"\\).*"), "repeated annotations");
+        assertTrue(!source.contains("@Tags({"), "container annotation");
+        assertTrue(source.contains("@Tag(\"single\")"), "single annotation");
+        assertTrue(CompilerUtil.compile("1.8", new JavaSourceFileObject(internalName, source)), "decompiled source does not recompile");
+
+        List<String> differences = RunComparison.compare(runResource(8, internalName), (ZipLoader)loader, internalName);
+        assertTrue(differences.isEmpty(), String.join("\n", differences));
+    }
+
     private static String runResource(int version, String internalName) {
         return "/java/org/jd/core/test/java" + version + "/" + internalName.substring(internalName.lastIndexOf('/') + 1) + ".run";
     }
