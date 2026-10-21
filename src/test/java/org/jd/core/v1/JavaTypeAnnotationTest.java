@@ -111,6 +111,41 @@ public class JavaTypeAnnotationTest {
             new JavaSourceFileObject("p/Body", source)), "the decompiled source does not recompile");
     }
 
+    /** Remaining item C6: upcasts consumed by 'areturn', 'putfield' and invocations */
+    @Test
+    public void upcasts() throws Exception {
+        Map<String, String> sources = new LinkedHashMap<>();
+        sources.put("p/A",
+            "package p;\n" +
+            "import java.lang.annotation.*;\n" +
+            "@Retention(RetentionPolicy.RUNTIME) @Target(ElementType.TYPE_USE) public @interface A {}\n");
+        sources.put("p/Upcasts",
+            "package p;\n" +
+            "public class Upcasts {\n" +
+            "    Object field;\n" +
+            "    public Object returned(String s) {\n" +
+            "        return (@A Object)s;\n" +
+            "    }\n" +
+            "    public void stored(String s) {\n" +
+            "        this.field = (@A Object)s;\n" +
+            "    }\n" +
+            "    public void passed(String s) {\n" +
+            "        use((@A Object)s);\n" +
+            "    }\n" +
+            "    void use(Object o) {}\n" +
+            "}\n");
+
+        InMemorySample sample = new InMemorySample(sources, "-g", "--release", "11");
+        String source = sample.decompile("p/Upcasts", Collections.emptyMap());
+
+        assertTrue(source.contains("return (@A Object)s;"), "return");
+        assertTrue(source.contains("this.field = (@A Object)s;"), "field");
+        assertTrue(source.contains("use((@A Object)s);"), "argument");
+        assertTrue(CompilerUtil.compile("11",
+            new JavaSourceFileObject("p/A", sources.get("p/A")),
+            new JavaSourceFileObject("p/Upcasts", source)), "the decompiled source does not recompile");
+    }
+
     /** Remaining item C5: non-static inner types ('type_path' kind 1) */
     @Test
     public void nonStaticInnerType() throws Exception {

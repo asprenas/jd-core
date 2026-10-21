@@ -111,19 +111,24 @@ public class ByteCodeParser {
     }
 
     /**
-     * @return 'offset' if it is an 'astore', the next offset if it is one (JDK 8 javac gives the offset of the
+     * @return 'offset' if it consumes the value (isUpcastConsumer), the next offset if it does (JDK 8 javac gives the offset of the
      *         instruction that loads the operand), or -1. -1 if there is a 'checkcast'
      */
     protected static int getUpcastStoreOffset(byte[] code, int offset) {
         if ((offset < 0) || (offset >= code.length) || (getCheckCastOffset(code, offset) != -1)) {
             return -1;
         }
-        if (isAStore(code[offset] & 255)) {
+        if (isUpcastConsumer(code[offset] & 255)) {
             return offset;
         }
 
         int next = offset + RecordPatternMaker.getInstructionLength(code, offset);
-        return ((next < code.length) && isAStore(code[next] & 255)) ? next : -1;
+        return ((next < code.length) && isUpcastConsumer(code[next] & 255)) ? next : -1;
+    }
+
+    /** 'astore', 'areturn', 'putstatic', 'putfield' or an invocation (not 'invokedynamic') */
+    protected static boolean isUpcastConsumer(int opcode) {
+        return isAStore(opcode) || (opcode == 176) || (opcode == 179) || ((opcode >= 181) && (opcode <= 185));
     }
 
     protected static boolean isAStore(int opcode) {
@@ -133,8 +138,8 @@ public class ByteCodeParser {
     /** 'cast' type annotations ('(@A String)o') by offset of the 'checkcast' instruction, or null */
     /**
      * @param checkCast true: by offset of the 'checkcast' instruction. false: casts without 'checkcast' ('(@A Object)s'
-     *                  is an upcast, javac does not check it) whose value is stored in a local variable, by offset of
-     *                  the 'astore' instruction
+     *                  is an upcast, javac does not check it), by offset of the instruction that consumes the value
+     *                  ('astore', 'areturn', 'putfield', 'putstatic' or an invocation)
      */
     protected static Map<Integer, TypeAnnotationReferences> makeCastTypeAnnotations(TypeMaker typeMaker, Method method, boolean checkCast) {
         AttributeCode code = method.getAttribute("Code");
@@ -854,6 +859,9 @@ public class ByteCodeParser {
                     statements.add(new SwitchStatement(stack.pop(), new DefaultList<>(count+1)));
                     break;
                 case 172: case 173: case 174: case 175: case 176: // IRETURN, LRETURN, FRETURN, DRETURN, ARETURN
+                    if (opcode == 176) {
+                        addUpcast(stack, offset, returnedType);
+                    }
                     parseXRETURN(statements, stack, lineNumber);
                     break;
                 case 177: // RETURN
@@ -863,15 +871,18 @@ public class ByteCodeParser {
                     parseGetStatic(stack, constants, lineNumber, ((code[++offset] & 255) << 8) | (code[++offset] & 255));
                     break;
                 case 179: // PUTSTATIC
+                    addFieldUpcast(stack, offset, constants, ((code[offset+1] & 255) << 8) | (code[offset+2] & 255));
                     parsePutStatic(statements, stack, constants, lineNumber, ((code[++offset] & 255) << 8) | (code[++offset] & 255));
                     break;
                 case 180: // GETFIELD
                     parseGetField(stack, constants, lineNumber, ((code[++offset] & 255) << 8) | (code[++offset] & 255));
                     break;
                 case 181: // PUTFIELD
+                    addFieldUpcast(stack, offset, constants, ((code[offset+1] & 255) << 8) | (code[offset+2] & 255));
                     parsePutField(statements, stack, constants, lineNumber, ((code[++offset] & 255) << 8) | (code[++offset] & 255));
                     break;
                 case 182: case 183: case 184: case 185: // INVOKEVIRTUAL, INVOKESPECIAL, INVOKESTATIC, INVOKEINTERFACE
+                    references = (upcastTypeAnnotations == null) ? null : upcastTypeAnnotations.get(offset);
                     constantMemberRef = constants.getConstant( ((code[++offset] & 255) << 8) | (code[++offset] & 255) );
                     typeName = constants.getConstantTypeName(constantMemberRef.getClassIndex());
                     ot = typeMaker.makeFromDescriptorOrInternalTypeName(typeName);
@@ -879,6 +890,10 @@ public class ByteCodeParser {
                     name = constants.getConstantUtf8(constantNameAndType.getNameIndex());
                     descriptor = constants.getConstantUtf8(constantNameAndType.getDescriptorIndex());
                     TypeMaker.MethodTypes methodTypes = makeMethodTypes(ot.getInternalName(), name, descriptor);
+                    if ((references != null) && (methodTypes.parameterTypes != null) && (methodTypes.parameterTypes.size() == 1)) {
+                        // 'm((@A Object)s)': with several parameters, the cast argument is unknown
+                        addUpcast(stack, references, methodTypes.parameterTypes.getFirst());
+                    }
                     BaseExpression parameters = extractParametersFromStack(statements, stack, methodTypes.parameterTypes);
 
                     if (opcode == 184) { // INVOKESTATIC
@@ -1766,6 +1781,39 @@ public class ByteCodeParser {
         CastExpression castExpression = new CastExpression(valueRef.getLineNumber(), localVariable.getType(), valueRef, true);
         castExpression.setTypeAnnotationReferences(references);
         return castExpression;
+    }
+
+    /**
+     * '(@A Object)s' consumed by 'areturn', 'putfield', 'putstatic' or an invocation: the cast type is supposed to be
+     * the type expected by the instruction
+     */
+    private void addUpcast(DefaultStack<Expression> stack, int offset, Type type) {
+        addUpcast(stack, (upcastTypeAnnotations == null) ? null : upcastTypeAnnotations.get(offset), type);
+    }
+
+    private void addUpcast(DefaultStack<Expression> stack, TypeAnnotationReferences references, Type type) {
+        if ((references == null) || (type == null) || !type.isObjectType() || stack.isEmpty()) {
+            return;
+        }
+
+        Expression valueRef = stack.pop();
+        CastExpression castExpression = new CastExpression(valueRef.getLineNumber(), type, valueRef, true);
+        castExpression.setTypeAnnotationReferences(references);
+        stack.push(castExpression);
+    }
+
+    private void addFieldUpcast(DefaultStack<Expression> stack, int offset, ConstantPool constants, int index) {
+        TypeAnnotationReferences references = (upcastTypeAnnotations == null) ? null : upcastTypeAnnotations.get(offset);
+
+        if (references != null) {
+            ConstantMemberRef constantMemberRef = constants.getConstant(index);
+            ConstantNameAndType constantNameAndType = constants.getConstant(constantMemberRef.getNameAndTypeIndex());
+            String descriptor = constants.getConstantUtf8(constantNameAndType.getDescriptorIndex());
+
+            if ((descriptor.charAt(0) == 'L') || (descriptor.charAt(0) == '[')) {
+                addUpcast(stack, references, typeMaker.makeFromDescriptor(descriptor));
+            }
+        }
     }
 
     private void parseASTORE(Statements statements, DefaultStack<Expression> stack, int lineNumber, int offset, AbstractLocalVariable localVariable, Expression valueRef) {
