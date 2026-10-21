@@ -473,13 +473,15 @@ public class ExpressionVisitor extends TypeVisitor {
         BaseTypeArgument nonWildcardTypeArguments = expression.getNonWildcardTypeArguments();
         BaseExpression parameters = expression.getParameters();
         boolean dot = false;
+        // 'this.<@A String>m()': annotated type arguments need a receiver
+        boolean annotatedTypeArguments = (nonWildcardTypeArguments != null) && (expression.getTypeAnnotationReferences() != null);
 
-        if (exp.isThisExpression()) {
+        if (exp.isThisExpression() && !annotatedTypeArguments) {
             // Nothing to do : do not print 'this.method(...)'
         } else if (exp.isObjectTypeReferenceExpression()) {
             ObjectType ot = exp.getObjectType();
 
-            if (! ot.getInternalName().equals(currentInternalTypeName)) {
+            if (annotatedTypeArguments || !ot.getInternalName().equals(currentInternalTypeName)) {
                 visit(expression, exp);
                 tokens.addLineNumberToken(expression);
                 tokens.add(TextToken.DOT);
@@ -502,7 +504,20 @@ public class ExpressionVisitor extends TypeVisitor {
 
         if ((nonWildcardTypeArguments != null) && dot) {
             tokens.add(TextToken.LEFTANGLEBRACKET);
-            nonWildcardTypeArguments.accept(this);
+            if (annotatedTypeArguments) {
+                int size = nonWildcardTypeArguments.typeArgumentSize();
+
+                for (int i = 0; i < size; i++) {
+                    if (i > 0) {
+                        tokens.add(TextToken.COMMA_SPACE);
+                    }
+                    // 'type_argument_index' i
+                    TypeArgument typeArgument = nonWildcardTypeArguments.isTypeArgumentList() ? nonWildcardTypeArguments.getTypeArgumentList().get(i) : nonWildcardTypeArguments.getTypeArgumentFirst();
+                    visitAnnotatedType((BaseType)typeArgument, expression.getTypeAnnotationReferences(), TypeAnnotationReferences.METHOD_INVOCATION_TYPE_ARGUMENT, i, "");
+                }
+            } else {
+                nonWildcardTypeArguments.accept(this);
+            }
             tokens.add(TextToken.RIGHTANGLEBRACKET);
         }
 

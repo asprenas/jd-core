@@ -37,6 +37,7 @@ public class TypeAnnotationReferences {
     public static final int CONSTRUCTOR_REFERENCE   = 0x45;
     public static final int METHOD_REFERENCE        = 0x46;
     public static final int CAST                    = 0x47;
+    public static final int METHOD_INVOCATION_TYPE_ARGUMENT = 0x49;
 
     public static final int EXTENDS_INDEX = 65535;
 

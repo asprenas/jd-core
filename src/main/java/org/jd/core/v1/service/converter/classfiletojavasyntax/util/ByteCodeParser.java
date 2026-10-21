@@ -189,12 +189,14 @@ public class ByteCodeParser {
                     for (TypeAnnotation ta : attribute.getTypeAnnotations()) {
                         int targetType = ta.getTargetType();
 
-                        if ((targetType >= TypeAnnotationReferences.INSTANCEOF) && (targetType <= TypeAnnotationReferences.METHOD_REFERENCE)) {
+                        boolean typeArgument = (targetType == TypeAnnotationReferences.METHOD_INVOCATION_TYPE_ARGUMENT);
+
+                        if (((targetType >= TypeAnnotationReferences.INSTANCEOF) && (targetType <= TypeAnnotationReferences.METHOD_REFERENCE)) || typeArgument) {
                             if (map == null) {
                                 map = new HashMap<>();
                             }
-                            map.computeIfAbsent(ta.getTargetIndex(), k -> new TypeAnnotationReferences())
-                               .add(targetType, 0, ta.getTypePath(), annotationConverter.convertTypeAnnotation(ta));
+                            map.computeIfAbsent(typeArgument ? getInvocationOffset(code.getCode(), ta.getTargetIndex()) : ta.getTargetIndex(), k -> new TypeAnnotationReferences())
+                               .add(targetType, typeArgument ? ta.getSecondIndex() : 0, ta.getTypePath(), annotationConverter.convertTypeAnnotation(ta));
                         }
                     }
                 }
@@ -882,6 +884,7 @@ public class ByteCodeParser {
                     parsePutField(statements, stack, constants, lineNumber, ((code[++offset] & 255) << 8) | (code[++offset] & 255));
                     break;
                 case 182: case 183: case 184: case 185: // INVOKEVIRTUAL, INVOKESPECIAL, INVOKESTATIC, INVOKEINTERFACE
+                    TypeAnnotationReferences typeArgumentReferences = (instructionTypeAnnotations == null) ? null : instructionTypeAnnotations.get(offset);
                     references = (upcastTypeAnnotations == null) ? null : upcastTypeAnnotations.get(offset);
                     constantMemberRef = constants.getConstant( ((code[++offset] & 255) << 8) | (code[++offset] & 255) );
                     typeName = constants.getConstantTypeName(constantMemberRef.getClassIndex());
@@ -897,7 +900,7 @@ public class ByteCodeParser {
                     BaseExpression parameters = extractParametersFromStack(statements, stack, methodTypes.parameterTypes);
 
                     if (opcode == 184) { // INVOKESTATIC
-                        expression1 = typeParametersToTypeArgumentsBinder.newMethodInvocationExpression(lineNumber, new ObjectTypeReferenceExpression(lineNumber, ot), ot, name, descriptor, methodTypes, parameters);
+                        expression1 = setTypeArgumentAnnotations(typeParametersToTypeArgumentsBinder.newMethodInvocationExpression(lineNumber, new ObjectTypeReferenceExpression(lineNumber, ot), ot, name, descriptor, methodTypes, parameters), typeArgumentReferences);
                         if (TYPE_VOID.equals(methodTypes.returnedType)) {
                             typeParametersToTypeArgumentsBinder.bindParameterTypesWithArgumentTypes(TYPE_OBJECT, expression1);
                             statements.add(new ExpressionStatement(expression1));
@@ -925,8 +928,8 @@ public class ByteCodeParser {
                                     statements.add(new ExpressionStatement(typeParametersToTypeArgumentsBinder.newSuperConstructorInvocationExpression(lineNumber, ot, descriptor, methodTypes, parameters)));
                                 }
                             } else {
-                                expression1 = typeParametersToTypeArgumentsBinder.newMethodInvocationExpression(
-                                    lineNumber, getMethodInstanceReference(opcode, constantMemberRef, expression1, ot,  name, descriptor), ot,  name, descriptor, methodTypes, parameters);
+                                expression1 = setTypeArgumentAnnotations(typeParametersToTypeArgumentsBinder.newMethodInvocationExpression(
+                                    lineNumber, getMethodInstanceReference(opcode, constantMemberRef, expression1, ot,  name, descriptor), ot,  name, descriptor, methodTypes, parameters), typeArgumentReferences);
                                 typeParametersToTypeArgumentsBinder.bindParameterTypesWithArgumentTypes(TYPE_OBJECT, expression1);
                                 statements.add(new ExpressionStatement(expression1));
                             }
@@ -940,8 +943,8 @@ public class ByteCodeParser {
                                     }
                                 }
                             }
-                            stack.push(typeParametersToTypeArgumentsBinder.newMethodInvocationExpression(
-                                lineNumber, getMethodInstanceReference(opcode, constantMemberRef, expression1, ot,  name, descriptor), ot, name, descriptor, methodTypes, parameters));
+                            stack.push(setTypeArgumentAnnotations(typeParametersToTypeArgumentsBinder.newMethodInvocationExpression(
+                                lineNumber, getMethodInstanceReference(opcode, constantMemberRef, expression1, ot,  name, descriptor), ot, name, descriptor, methodTypes, parameters), typeArgumentReferences));
                         }
                     }
                     break;
@@ -1800,6 +1803,32 @@ public class ByteCodeParser {
         CastExpression castExpression = new CastExpression(valueRef.getLineNumber(), type, valueRef, true);
         castExpression.setTypeAnnotationReferences(references);
         stack.push(castExpression);
+    }
+
+    /**
+     * @return the offset of the invocation: javac gives the offset of the 'checkcast' of the returned value when
+     *         there is one
+     */
+    protected static int getInvocationOffset(byte[] code, int offset) {
+        if ((offset < 0) || (offset >= code.length) || ((code[offset] & 255) != 192)) { // CHECKCAST
+            return offset;
+        }
+
+        int previous = -1;
+
+        for (int i = 0; i < offset; i += RecordPatternMaker.getInstructionLength(code, i)) {
+            previous = i;
+        }
+
+        return (previous == -1) ? offset : previous;
+    }
+
+    /** 'this.<@A String>m()': the annotations of the explicit type arguments */
+    private static Expression setTypeArgumentAnnotations(Expression expression, TypeAnnotationReferences references) {
+        if ((references != null) && expression.isMethodInvocationExpression()) {
+            ((MethodInvocationExpression)expression).setTypeAnnotationReferences(references);
+        }
+        return expression;
     }
 
     private void addFieldUpcast(DefaultStack<Expression> stack, int offset, ConstantPool constants, int index) {

@@ -111,6 +111,42 @@ public class JavaTypeAnnotationTest {
             new JavaSourceFileObject("p/Body", source)), "the decompiled source does not recompile");
     }
 
+    /** Remaining item C3: explicit type arguments of method invocations (0x49) */
+    @Test
+    public void methodInvocationTypeArguments() throws Exception {
+        Map<String, String> sources = new LinkedHashMap<>();
+        sources.put("p/A",
+            "package p;\n" +
+            "import java.lang.annotation.*;\n" +
+            "@Retention(RetentionPolicy.RUNTIME) @Target(ElementType.TYPE_USE) public @interface A {}\n");
+        sources.put("p/Args",
+            "package p;\n" +
+            "import java.util.*;\n" +
+            "public class Args {\n" +
+            "    <T> T id(T t) { return t; }\n" +
+            "    static <K, V> Map<K, V> map() { return new HashMap<>(); }\n" +
+            "    public String instance() {\n" +
+            "        return this.<@A String>id(\"x\");\n" +
+            "    }\n" +
+            "    public Map<String, Integer> both() {\n" +
+            "        return Args.<String, @A Integer>map();\n" +
+            "    }\n" +
+            "    public List<String> other() {\n" +
+            "        return Collections.<@A String>emptyList();\n" +
+            "    }\n" +
+            "}\n");
+
+        InMemorySample sample = new InMemorySample(sources, "-g", "--release", "11");
+        String source = sample.decompile("p/Args", Collections.emptyMap());
+
+        assertTrue(source.contains("this.<@A String>id(\"x\")"), "instance method");
+        assertTrue(source.contains("Args.<String, @A Integer>map()"), "second type argument");
+        assertTrue(source.contains("Collections.<@A String>emptyList()"), "method of another class");
+        assertTrue(CompilerUtil.compile("11",
+            new JavaSourceFileObject("p/A", sources.get("p/A")),
+            new JavaSourceFileObject("p/Args", source)), "the decompiled source does not recompile");
+    }
+
     /** Remaining item C6: upcasts consumed by 'areturn', 'putfield' and invocations */
     @Test
     public void upcasts() throws Exception {

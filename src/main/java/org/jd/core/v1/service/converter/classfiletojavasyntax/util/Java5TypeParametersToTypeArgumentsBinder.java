@@ -359,7 +359,9 @@ public class Java5TypeParametersToTypeArgumentsBinder extends AbstractTypeParame
     protected static class RemoveNonWildcardTypeArgumentsVisitor extends AbstractNopExpressionVisitor {
         @Override
         public void visit(MethodInvocationExpression expression) {
-            expression.setNonWildcardTypeArguments(null);
+            if (expression.getTypeAnnotationReferences() == null) {
+                expression.setNonWildcardTypeArguments(null);
+            }
         }
     }
 
@@ -492,7 +494,7 @@ public class Java5TypeParametersToTypeArgumentsBinder extends AbstractTypeParame
             this.type = expressionType;
             exp.accept(this);
 
-            if (exp.isMethodInvocationExpression() && isInferredFromArguments((ClassFileMethodInvocationExpression)exp)) {
+            if (exp.isMethodInvocationExpression() && (((MethodInvocationExpression)exp).getTypeAnnotationReferences() == null) && isInferredFromArguments((ClassFileMethodInvocationExpression)exp)) {
                 // '.map(String::trim)', not '.<String>map(String::trim)': a receiver is inferred from its arguments
                 ((ClassFileMethodInvocationExpression)exp).setNonWildcardTypeArguments(null);
             }
