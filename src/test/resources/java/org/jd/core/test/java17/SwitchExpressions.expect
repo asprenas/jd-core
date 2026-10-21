@@ -34,3 +34,7 @@
 ~ String upper = s\.toUpperCase\(\);
 ~ int r = k \* 2;
 - String upper;
+# withTryCatch: javac temporary variable of yield
+~ yield Integer\.parseInt\(s\);
+~ case 0 -> 0;
+- int i;

@@ -186,8 +186,26 @@ public class ArrowSwitchUtil {
     }
 
     protected static boolean isTerminal(Statement statement) {
+        if (statement.isTryStatement() && (statement.getFinallyStatements() == null) && !statement.getCatchClauses().isEmpty()) {
+            // 'try { yield a; } catch (E e) { yield b; }'
+            if (!isTerminal(statement.getTryStatements())) {
+                return false;
+            }
+            for (TryStatement.CatchClause catchClause : statement.getCatchClauses()) {
+                if (!isTerminal(catchClause.getStatements())) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
         return statement.isBreakStatement() || statement.isYieldStatement() || statement.isReturnStatement() ||
                statement.isReturnExpressionStatement() || statement.isThrowStatement() || statement.isContinueStatement();
+    }
+
+    protected static boolean isTerminal(BaseStatement statements) {
+        Statement last = ((statements == null) || (statements.size() == 0)) ? null : getLast(statements);
+        return (last != null) && isTerminal(last);
     }
 
     protected static boolean isUnlabeledBreak(Statement statement) {
