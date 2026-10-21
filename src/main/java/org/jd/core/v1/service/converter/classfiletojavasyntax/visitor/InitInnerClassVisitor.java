@@ -121,6 +121,11 @@ public class InitInnerClassVisitor extends AbstractJavaSyntaxVisitor {
                         // javac 'Objects.requireNonNull(this$0)' on the synthetic outer instance parameter
                         if ((outerClassFile != null) && !classFile.isStatic()) {
                             removeFirstParameter = true;
+
+                            if (outerTypeFieldName == null) {
+                                // No field 'this$0' (outer instance not used): 'new Local(this, ...)' passes it anyway
+                                outerTypeFieldName = "this$0";
+                            }
                         }
                         syntheticFieldInitialization = true;
                     }
@@ -138,6 +143,14 @@ public class InitInnerClassVisitor extends AbstractJavaSyntaxVisitor {
                             } else if (name.startsWith("val$")) {
                                 syntheticInnerFieldNames.add(name);
                                 syntheticFieldInitialization = true;
+
+                                Expression value = expression.getRightExpression();
+
+                                if (value.isLocalVariableReferenceExpression()) {
+                                    // Java 25+: the statements before 'super(...)' read the captured variable from the
+                                    // synthetic parameter, not from the field 'val$s': the parameter is 's'
+                                    ((ClassFileLocalVariableReferenceExpression)value).getLocalVariable().setName(name.substring(4));
+                                }
                             }
                         }
                     }
