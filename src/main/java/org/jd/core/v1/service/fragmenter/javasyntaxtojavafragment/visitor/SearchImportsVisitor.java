@@ -17,6 +17,7 @@ import org.jd.core.v1.model.javasyntax.reference.AnnotationElementValue;
 import org.jd.core.v1.model.javasyntax.reference.AnnotationReference;
 import org.jd.core.v1.model.javasyntax.reference.AnnotationReferences;
 import org.jd.core.v1.model.javasyntax.reference.TypeAnnotationReferences;
+import org.jd.core.v1.model.javasyntax.statement.TryStatement;
 import org.jd.core.v1.model.javasyntax.type.BaseType;
 import org.jd.core.v1.model.javasyntax.type.ObjectType;
 import org.jd.core.v1.service.fragmenter.javasyntaxtojavafragment.util.JavaFragmentFactory;
@@ -154,6 +155,18 @@ public class SearchImportsVisitor extends AbstractJavaSyntaxVisitor {
         if (maxLineNumber < expression.getLineNumber()) maxLineNumber = expression.getLineNumber();
         super.visit(expression);
         acceptTypeAnnotations(expression.getTypeAnnotationReferences());
+    }
+
+    @Override
+    public void visit(TryStatement.CatchClause statement) {
+        super.visit(statement);
+        acceptTypeAnnotations(statement.getTypeAnnotationReferences());
+    }
+
+    @Override
+    public void visit(TryStatement.Resource resource) {
+        super.visit(resource);
+        acceptTypeAnnotations(resource.getTypeAnnotationReferences());
     }
 
     @Override

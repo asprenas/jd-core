@@ -38,4 +38,43 @@ public class JavaTypeAnnotationTest {
             new JavaSourceFileObject("p/A", sources.get("p/A")),
             new JavaSourceFileObject("p/Dates", source)), "the decompiled source does not recompile");
     }
+
+    /** Remaining items C1, C2: resource variables (0x41) and exception parameters (0x42) */
+    @Test
+    public void resourceAndCatch() throws Exception {
+        Map<String, String> sources = new LinkedHashMap<>();
+        sources.put("p/A",
+            "package p;\n" +
+            "import java.lang.annotation.*;\n" +
+            "@Retention(RetentionPolicy.RUNTIME) @Target(ElementType.TYPE_USE) public @interface A {}\n");
+        sources.put("p/Body",
+            "package p;\n" +
+            "import java.io.*;\n" +
+            "public class Body {\n" +
+            "    public int read(String path) {\n" +
+            "        try (@A Reader reader = new FileReader(path)) {\n" +
+            "            return reader.read();\n" +
+            "        } catch (@A IOException e) {\n" +
+            "            return -1;\n" +
+            "        }\n" +
+            "    }\n" +
+            "    public int parse(String s) {\n" +
+            "        try {\n" +
+            "            return Integer.parseInt(s);\n" +
+            "        } catch (@A NumberFormatException e) {\n" +
+            "            return e.getMessage().length();\n" +
+            "        }\n" +
+            "    }\n" +
+            "}\n");
+
+        InMemorySample sample = new InMemorySample(sources, "-g", "--release", "11");
+        String source = sample.decompile("p/Body", Collections.emptyMap());
+
+        assertTrue(source.contains("try (@A Reader reader = new FileReader(path))"), "resource variable");
+        assertTrue(source.contains("catch (@A IOException e)"), "exception parameter");
+        assertTrue(source.contains("catch (@A NumberFormatException e)"), "exception parameter");
+        assertTrue(CompilerUtil.compile("11",
+            new JavaSourceFileObject("p/A", sources.get("p/A")),
+            new JavaSourceFileObject("p/Body", source)), "the decompiled source does not recompile");
+    }
 }

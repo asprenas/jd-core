@@ -175,6 +175,8 @@ public class LocalVariableMaker {
     /** 'localvar_target' type annotations: a range of the annotation is the LocalVariableTable range of the variable */
     protected void initTypeAnnotations(AttributeCode code) {
         AnnotationConverter annotationConverter = null;
+        // 'catch_target': handler offsets, a multi-catch has one exception table entry by type
+        HashSet<String> catchAnnotations = new HashSet<>();
 
         for (String name : new String[] { "RuntimeVisibleTypeAnnotations", "RuntimeInvisibleTypeAnnotations" }) {
             AttributeTypeAnnotations attribute = code.getAttribute(name);
@@ -183,7 +185,8 @@ public class LocalVariableMaker {
                 for (TypeAnnotation ta : attribute.getTypeAnnotations()) {
                     int[] ranges = ta.getLocalVariableRanges();
 
-                    if ((ranges != null) && (ta.getTargetType() == TypeAnnotationReferences.LOCAL_VARIABLE)) {
+                    if ((ranges != null) && ((ta.getTargetType() == TypeAnnotationReferences.LOCAL_VARIABLE) || (ta.getTargetType() == TypeAnnotationReferences.RESOURCE_VARIABLE))) {
+                        // A resource variable is a local variable: both are printed with the target 'LOCAL_VARIABLE'
                         for (int i = 0; i < ranges.length; i += 3) {
                             AbstractLocalVariable lv = localVariableSet.get(ranges[i+2], ranges[i]);
 
@@ -196,6 +199,25 @@ public class LocalVariableMaker {
                                 }
                                 lv.getTypeAnnotationReferences().add(TypeAnnotationReferences.LOCAL_VARIABLE, -1, ta.getTypePath(), annotationConverter.convertTypeAnnotation(ta));
                                 break;
+                            }
+                        }
+                    } else if ((ta.getTargetType() == TypeAnnotationReferences.CATCH) && (code.getExceptionTable() != null) &&
+                               (ta.getTargetIndex() < code.getExceptionTable().length)) {
+                        // 'catch (@A IOException e)': the handler starts with 'astore e', the variable starts after it
+                        int handlerPc = code.getExceptionTable()[ta.getTargetIndex()].getHandlerPc();
+                        int[] store = RecordPatternMaker.decodeStore(code.getCode(), handlerPc);
+
+                        if ((store != null) && (store[0] == 'a') && catchAnnotations.add(handlerPc + ":" + ta.getTypePath() + ":" + ta.getAnnotation().getDescriptor())) {
+                            AbstractLocalVariable lv = localVariableSet.get(store[1], handlerPc + store[2]);
+
+                            if ((lv != null) && (lv.getFromOffset() == handlerPc + store[2])) {
+                                if (annotationConverter == null) {
+                                    annotationConverter = new AnnotationConverter(typeMaker);
+                                }
+                                if (lv.getTypeAnnotationReferences() == null) {
+                                    lv.setTypeAnnotationReferences(new TypeAnnotationReferences());
+                                }
+                                lv.getTypeAnnotationReferences().add(TypeAnnotationReferences.LOCAL_VARIABLE, -1, ta.getTypePath(), annotationConverter.convertTypeAnnotation(ta));
                             }
                         }
                     }
