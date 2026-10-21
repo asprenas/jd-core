@@ -6,3 +6,5 @@
 - MatchException
 ~ case String \w+ when \w+\.isEmpty\(\)( ->|:)
 ~ case Color \w+ when \w+ == Color\.RED( ->|:)
+~ switch \(o\)
+- Object object = o;

@@ -527,6 +527,9 @@ public class SwitchStatementMaker {
             }
         }
 
+        selector = inlineSelectorTemporary(statements, switchIsLastStatement, selector);
+        switchStatement.setCondition(selector);
+
         List<SwitchStatement.Block> blocks = switchStatement.getBlocks();
         int defaultIndex = -1;
 
@@ -775,6 +778,39 @@ public class SwitchStatementMaker {
 
         statements.getList().remove(0);
         return negate(ifStatement.getCondition());
+    }
+
+    /**
+     * 'Object object = o; switch (object) {...}': javac copies the selector to a temporary variable, not in the
+     * 'LocalVariableTable'. When the copied value is a variable of the table (debug information present), of the same
+     * type, the temporary variable is replaced by it: 'switch (o) {...}'.
+     *
+     * @return the new selector
+     */
+    protected static Expression inlineSelectorTemporary(Statements statements, boolean switchIsLastStatement, Expression selector) {
+        int index = statements.size() - (switchIsLastStatement ? 2 : 1);
+
+        if ((index < 0) || !selector.isLocalVariableReferenceExpression()) {
+            return selector;
+        }
+
+        Expression expression = statements.get(index).getExpression();
+
+        if (!isAssignment(expression, selector) || !expression.getRightExpression().isLocalVariableReferenceExpression()) {
+            return selector;
+        }
+
+        AbstractLocalVariable temporary = ((ClassFileLocalVariableReferenceExpression)selector).getLocalVariable();
+        Expression value = expression.getRightExpression();
+        AbstractLocalVariable variable = ((ClassFileLocalVariableReferenceExpression)value).getLocalVariable();
+
+        if ((temporary.getName() != null) || (variable.getName() == null) || (temporary == variable) || !temporary.getType().equals(variable.getType())) {
+            return selector;
+        }
+
+        statements.remove(index);
+        temporary.setDeclared(true);
+        return value;
     }
 
     protected static Expression negate(Expression expression) {
