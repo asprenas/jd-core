@@ -7,6 +7,8 @@
 
 package org.jd.core.v1.service.converter.classfiletojavasyntax.util;
 
+import org.jd.core.v1.api.loader.Loader;
+import org.jd.core.v1.model.classfile.ClassFile;
 import org.jd.core.v1.model.classfile.attribute.*;
 import org.jd.core.v1.model.classfile.attribute.ElementValue;
 import org.jd.core.v1.model.classfile.attribute.ElementValuePair;
@@ -15,13 +17,100 @@ import org.jd.core.v1.model.javasyntax.expression.*;
 import org.jd.core.v1.model.javasyntax.reference.*;
 import org.jd.core.v1.model.javasyntax.type.ObjectType;
 import org.jd.core.v1.model.javasyntax.type.PrimitiveType;
+import org.jd.core.v1.service.deserializer.classfile.ClassFileDeserializer;
+
+import java.util.HashMap;
 
 public class AnnotationConverter implements ElementValueVisitor {
     protected TypeMaker typeMaker;
     protected org.jd.core.v1.model.javasyntax.reference.ElementValue elementValue = null;
 
+    // Loader of the annotation types: '@Tags({@Tag("a"), @Tag("b")})' is written '@Tag("a") @Tag("b")', or null
+    protected Loader repeatableAnnotationLoader;
+    protected HashMap<String, String> containerDescriptors = new HashMap<>();
+
     public AnnotationConverter(TypeMaker typeMaker) {
         this.typeMaker = typeMaker;
+    }
+
+    /**
+     * Java 8+ repeatable annotations ('repeatableAnnotations' configuration): a container annotation is replaced
+     * by its annotations when their type is annotated '@Repeatable(Container.class)'
+     */
+    public void setRepeatableAnnotationLoader(Loader loader) {
+        this.repeatableAnnotationLoader = loader;
+    }
+
+    /** Adds the annotation, or the annotations of a container of repeatable annotations */
+    @SuppressWarnings("unchecked")
+    protected void addConverted(AnnotationReferences list, Annotation annotation) {
+        Annotation[] repeated = getRepeatedAnnotations(annotation);
+
+        if (repeated == null) {
+            list.add(convert(annotation));
+        } else {
+            for (Annotation a : repeated) {
+                list.add(convert(a));
+            }
+        }
+    }
+
+    /** @return the annotations of '@Tags({@Tag("a"), @Tag("b")})' if 'Tag' is '@Repeatable(Tags.class)', or null */
+    protected Annotation[] getRepeatedAnnotations(Annotation container) {
+        ElementValuePair[] pairs = container.getElementValuePairs();
+
+        if ((repeatableAnnotationLoader == null) || (pairs == null) || (pairs.length != 1) || !"value".equals(pairs[0].getElementName()) ||
+                !(pairs[0].getElementValue() instanceof ElementValueArrayValue)) {
+            return null;
+        }
+
+        ElementValue[] values = ((ElementValueArrayValue)pairs[0].getElementValue()).getValues();
+
+        if ((values == null) || (values.length < 2)) {
+            return null;
+        }
+
+        Annotation[] annotations = new Annotation[values.length];
+
+        for (int i = 0; i < values.length; i++) {
+            if (!(values[i] instanceof ElementValueAnnotationValue)) {
+                return null;
+            }
+            annotations[i] = ((ElementValueAnnotationValue)values[i]).getAnnotationValue();
+            if (!annotations[i].getDescriptor().equals(annotations[0].getDescriptor())) {
+                return null;
+            }
+        }
+
+        return container.getDescriptor().equals(getContainerDescriptor(annotations[0].getDescriptor())) ? annotations : null;
+    }
+
+    /** @return the descriptor of 'X' in '@Repeatable(X.class)' of the annotation type, or "" */
+    protected String getContainerDescriptor(String descriptor) {
+        return containerDescriptors.computeIfAbsent(descriptor, d -> {
+            try {
+                String internalTypeName = d.substring(1, d.length() - 1);
+                ClassFile classFile = new ClassFileDeserializer().loadClassFile(repeatableAnnotationLoader, internalTypeName);
+
+                for (String name : new String[] { "RuntimeVisibleAnnotations", "RuntimeInvisibleAnnotations" }) {
+                    Annotations annotations = classFile.getAttribute(name);
+
+                    if (annotations != null) {
+                        for (Annotation a : annotations.getAnnotations()) {
+                            ElementValuePair[] pairs = a.getElementValuePairs();
+
+                            if ("Ljava/lang/annotation/Repeatable;".equals(a.getDescriptor()) && (pairs != null) && (pairs.length == 1) &&
+                                    (pairs[0].getElementValue() instanceof ElementValueClassInfo)) {
+                                return ((ElementValueClassInfo)pairs[0].getElementValue()).getClassInfo();
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                // Not loaded: the container is kept
+            }
+            return "";
+        });
     }
 
     @SuppressWarnings("unchecked")
@@ -39,10 +128,10 @@ public class AnnotationConverter implements ElementValueVisitor {
                 AnnotationReferences aral = new AnnotationReferences();
 
                 for (Annotation a : visibles.getAnnotations()) {
-                    aral.add(convert(a));
+                    addConverted(aral, a);
                 }
                 for (Annotation a : invisibles.getAnnotations()) {
-                    aral.add(convert(a));
+                    addConverted(aral, a);
                 }
 
                 return aral;
@@ -203,13 +292,13 @@ public class AnnotationConverter implements ElementValueVisitor {
     protected BaseAnnotationReference convert(Annotations annotations) {
         Annotation[] as = annotations.getAnnotations();
 
-        if (as.length == 1) {
+        if ((as.length == 1) && (getRepeatedAnnotations(as[0]) == null)) {
             return convert(as[0]);
         } else {
             AnnotationReferences aral = new AnnotationReferences(as.length);
 
             for (Annotation a : as) {
-                aral.add(convert(a));
+                addConverted(aral, a);
             }
 
             return aral;

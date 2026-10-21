@@ -60,6 +60,13 @@ public class ConvertClassFileProcessor implements Processor {
         ClassFile classFile = message.getBody();
 
         AnnotationConverter annotationConverter = new AnnotationConverter(typeMaker);
+        Map<String, Object> configuration = message.getHeader("configuration");
+        Object repeatableAnnotations = (configuration == null) ? null : configuration.get("repeatableAnnotations");
+
+        if ((repeatableAnnotations != null) && "true".equals(repeatableAnnotations.toString()) && (classFile.getMajorVersion() >= 52)) {
+            // Java 8+
+            annotationConverter.setRepeatableAnnotationLoader(message.getHeader("loader"));
+        }
 
         TypeDeclaration typeDeclaration;
 
