@@ -50,10 +50,13 @@ public class ExpressionVisitor extends TypeVisitor {
     protected HashSet<String> currentMethodParamNames = new HashSet<>();
     protected String currentTypeName;
     protected HexaExpressionVisitor hexaExpressionVisitor = new HexaExpressionVisitor();
+    protected boolean textBlocksSupported;
+    protected boolean textBlocksEnabled;
 
     public ExpressionVisitor(Loader loader, String mainInternalTypeName, int majorVersion, ImportsFragment importsFragment) {
         super(loader, mainInternalTypeName, majorVersion, importsFragment);
         this.diamondOperatorSupported = (majorVersion >= 51); // (majorVersion >= Java 7)
+        this.textBlocksSupported = (majorVersion >= 59); // (majorVersion >= Java 15)
     }
 
     public DefaultList<Fragment> getFragments() {
@@ -651,7 +654,23 @@ public class ExpressionVisitor extends TypeVisitor {
     @Override
     public void visit(StringConstantExpression expression) {
         tokens.addLineNumberToken(expression);
-        tokens.add(new StringConstantToken(StringUtil.escapeString(expression.getStringValue()), currentInternalTypeName));
+
+        String textBlock = textBlocksEnabled ? StringUtil.toTextBlock(expression.getStringValue()) : null;
+
+        if (textBlock == null) {
+            tokens.add(new StringConstantToken(StringUtil.escapeString(expression.getStringValue()), currentInternalTypeName));
+        } else {
+            // One token: the lines of the text block are not lines of the layout. The writer adds the outer '"'
+            tokens.add(new StringConstantToken(textBlock.substring(1, textBlock.length() - 1), currentInternalTypeName));
+        }
+    }
+
+    /**
+     * Java 15+ text blocks for the strings of several lines ('textBlocks' configuration, off by default: the line
+     * breaks of a text block are not known by the layout, the following lines of the output are shifted)
+     */
+    public void setTextBlocksEnabled(boolean enabled) {
+        this.textBlocksEnabled = enabled && textBlocksSupported;
     }
 
     @Override

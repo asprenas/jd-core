@@ -16,6 +16,7 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.BufferedReader;
 import java.io.InputStream;
@@ -144,6 +145,30 @@ public class JavaLanguageVersionTest {
         }
     }
 
+    /** Phase 4-3: 'textBlocks' configuration, the text blocks must have the values of the original strings */
+    @ParameterizedTest(name = "java17 TextBlocks{0} textBlocks=true")
+    @ValueSource(strings = {"", "-javac" + NEWEST_JDK})
+    public void textBlocksConfiguration(String variant) throws Exception {
+        assumeTrue(parseSelection(System.getenv("JDCORE_SAMPLES")).contains(17), "java17 samples not selected");
+        assumeTrue(runtimeFeatureVersion() >= 17, "recompilation needs a JDK 17+");
+
+        String internalName = "org/jd/core/test/java17/TextBlocks";
+        Loader loader = loader("/zip/data-java-language-17" + variant + ".zip");
+        String source = decompile(loader, new PlainTextPrinter(), internalName, Collections.singletonMap("textBlocks", "true"));
+
+        System.out.println("- - - - - - - - ");
+        System.out.println(source);
+        System.out.println("- - - - - - - - ");
+
+        assertTrue(source.contains("\"\"\"\n<html>\n    <body>\n"), "html() is not a text block");
+        assertTrue(source.contains("keep \\s\n"), "trailing spaces are not kept");
+        assertTrue(source.contains("\"line1\\nline2\""), "a string without final line break is not a text block");
+        assertTrue(CompilerUtil.compile("17", new JavaSourceFileObject(internalName, source)), "decompiled source does not recompile");
+
+        List<String> differences = RunComparison.compare(runResource(17, internalName), (ZipLoader)loader, internalName);
+        assertTrue(differences.isEmpty(), String.join("\n", differences));
+    }
+
     private static String runResource(int version, String internalName) {
         return "/java/org/jd/core/test/java" + version + "/" + internalName.substring(internalName.lastIndexOf('/') + 1) + ".run";
     }
@@ -265,11 +290,15 @@ public class JavaLanguageVersionTest {
     }
 
     private static String decompile(Loader loader, PlainTextPrinter printer, String internalTypeName) throws Exception {
+        return decompile(loader, printer, internalTypeName, Collections.emptyMap());
+    }
+
+    private static String decompile(Loader loader, PlainTextPrinter printer, String internalTypeName, Map<String, Object> configuration) throws Exception {
         Message message = new Message();
         message.setHeader("loader", loader);
         message.setHeader("printer", printer);
         message.setHeader("mainInternalTypeName", internalTypeName);
-        message.setHeader("configuration", Collections.emptyMap());
+        message.setHeader("configuration", configuration);
 
         new DeserializeClassFileProcessor().process(message);
         new ClassFileToJavaSyntaxProcessor().process(message);
