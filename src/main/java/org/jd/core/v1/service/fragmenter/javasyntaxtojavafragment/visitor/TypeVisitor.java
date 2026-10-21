@@ -245,16 +245,29 @@ public class TypeVisitor extends AbstractJavaSyntaxVisitor {
     public void visit(InnerObjectType type) {
         String path = typeAnnotationPath;
         String elementPath = elementTypeAnnotationPath(type.getDimension());
+        // A non-static inner type is one 'type_path' step (kind 1) deeper than its outer type: 'Outer.@A Inner' is at '1,0;'.
+        // Without annotation at this step, the inner type is supposed static: '@A Outer.Inner' of a non-static type is not supported.
+        String innerPath = elementPath + "1,0;";
+        boolean nonStatic = (typeAnnotationReferences != null) && (typeAnnotationReferences.get(typeAnnotationTarget, typeAnnotationIndex, innerPath) != null);
 
-        if ((currentInternalTypeName == null) || (!currentInternalTypeName.equals(type.getInternalName()) && !currentInternalTypeName.equals(type.getOuterType().getInternalName()))) {
+        if (nonStatic || (currentInternalTypeName == null) || (!currentInternalTypeName.equals(type.getInternalName()) && !currentInternalTypeName.equals(type.getOuterType().getInternalName()))) {
             BaseType outerType = type.getOuterType();
             TypeAnnotationReferences references = typeAnnotationReferences;
 
-            // Annotations of the outer types of non-static inner types ('@A Outer.Inner') are not supported
-            typeAnnotationReferences = null;
+            if (nonStatic) {
+                // '@B Outer.@A Inner'
+                typeAnnotationPath = elementPath;
+            } else {
+                typeAnnotationReferences = null;
+            }
             outerType.accept(this);
             typeAnnotationReferences = references;
+            typeAnnotationPath = path;
             tokens.add(TextToken.DOT);
+        }
+
+        if (nonStatic) {
+            elementPath = innerPath;
         }
 
         // 'Outer.@A Inner'
