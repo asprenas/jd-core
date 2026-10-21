@@ -20,6 +20,8 @@ import org.jd.core.v1.model.javasyntax.type.BaseType;
 import org.jd.core.v1.model.token.*;
 import org.jd.core.v1.service.fragmenter.javasyntaxtojavafragment.util.ArrowSwitchUtil;
 import org.jd.core.v1.service.fragmenter.javasyntaxtojavafragment.util.JavaFragmentFactory;
+import org.jd.core.v1.service.fragmenter.javasyntaxtojavafragment.util.UnnamedVariableUtil;
+import org.jd.core.v1.model.javasyntax.declaration.LocalVariableDeclarator;
 
 import java.util.Collections;
 import java.util.Iterator;
@@ -53,6 +55,9 @@ public class StatementVisitor extends ExpressionVisitor {
     public static final KeywordToken WHILE = new KeywordToken("while");
 
     public static final TextToken SPACE_ARROW = new TextToken(" ->");
+
+    // Declarator of the statement being printed, written '_'
+    protected LocalVariableDeclarator unnamedDeclarator;
 
     protected boolean arrowSwitchSupported;
 
@@ -204,7 +209,7 @@ public class StatementVisitor extends ExpressionVisitor {
         type.accept(this);
 
         tokens.add(TextToken.SPACE);
-        tokens.add(newTextToken(statement.getName()));
+        tokens.add(newTextToken(getVariableName(statement.getName(), statement.getStatements())));
         tokens.add(TextToken.SPACE_COLON_SPACE);
 
         statement.getExpression().accept(this);
@@ -474,14 +479,24 @@ public class StatementVisitor extends ExpressionVisitor {
     public void visit(Statements list) {
         int size = list.size();
 
-        if (size > 0) {
-            Iterator<Statement> iterator = list.iterator();
-            iterator.next().accept(this);
-
-            for (int i = 1; i < size; i++) {
+        for (int i = 0; i < size; i++) {
+            if (i > 0) {
                 JavaFragmentFactory.addSpacerBetweenStatements(fragments);
-                iterator.next().accept(this);
             }
+
+            Statement statement = list.get(i);
+
+            if (unnamedVariablesEnabled) {
+                // 'T _ = init;': the variable is not read by the next statements of the block
+                LocalVariableDeclarator declarator = UnnamedVariableUtil.getUnnamedCandidate(statement);
+
+                if ((declarator != null) && !UnnamedVariableUtil.isReferenced(list.subList(i + 1, size), declarator.getName())) {
+                    unnamedDeclarator = declarator;
+                }
+            }
+
+            statement.accept(this);
+            unnamedDeclarator = null;
         }
     }
 
@@ -771,7 +786,7 @@ public class StatementVisitor extends ExpressionVisitor {
                 }
 
                 tokens.add(TextToken.SPACE);
-                tokens.add(newTextToken(cc.getName()));
+                tokens.add(newTextToken(getVariableName(cc.getName(), cc.getStatements())));
                 tokens.add(TextToken.RIGHTROUNDBRACKET);
 
                 int lineNumber = cc.getLineNumber();

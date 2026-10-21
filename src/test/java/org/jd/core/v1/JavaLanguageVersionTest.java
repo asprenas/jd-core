@@ -12,6 +12,7 @@ import org.jd.core.v1.service.fragmenter.javasyntaxtojavafragment.JavaSyntaxToJa
 import org.jd.core.v1.service.layouter.LayoutFragmentProcessor;
 import org.jd.core.v1.service.tokenizer.javafragmenttotoken.JavaFragmentToTokenProcessor;
 import org.jd.core.v1.service.writer.WriteTokenProcessor;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -166,6 +167,31 @@ public class JavaLanguageVersionTest {
         assertTrue(CompilerUtil.compile("17", new JavaSourceFileObject(internalName, source)), "decompiled source does not recompile");
 
         List<String> differences = RunComparison.compare(runResource(17, internalName), (ZipLoader)loader, internalName);
+        assertTrue(differences.isEmpty(), String.join("\n", differences));
+    }
+
+    /** Phase 4-5: 'unnamedVariables' configuration, '_' only for the variables that are not read */
+    @Test
+    public void unnamedVariablesConfiguration() throws Exception {
+        assumeTrue(parseSelection(System.getenv("JDCORE_SAMPLES")).contains(25), "java25 samples not selected");
+        assumeTrue(runtimeFeatureVersion() >= 25, "recompilation needs a JDK 25+");
+
+        String internalName = "org/jd/core/test/java25/UnnamedVariables";
+        Loader loader = loader("/zip/data-java-language-25.zip");
+        String source = decompile(loader, new PlainTextPrinter(), internalName, Collections.singletonMap("unnamedVariables", "true"));
+
+        System.out.println("- - - - - - - - ");
+        System.out.println(source);
+        System.out.println("- - - - - - - - ");
+
+        assertTrue(source.matches("(?s).*catch \\(NumberFormatException _\\).*"), "unread catch parameter");
+        assertTrue(source.matches("(?s).*for \\(String _ : list\\).*"), "unread for-each variable");
+        assertTrue(source.matches("(?s).*long _ = System\\.nanoTime\\(\\);.*"), "unread local variable");
+        assertTrue(source.matches("(?s).*\\(a, _\\) -> a.*"), "unread lambda parameter");
+        assertTrue(source.matches("(?s).*int n = 0;.*n\\+\\+.*"), "a read variable keeps its name");
+        assertTrue(CompilerUtil.compile("25", new JavaSourceFileObject(internalName, source)), "decompiled source does not recompile");
+
+        List<String> differences = RunComparison.compare(runResource(25, internalName), (ZipLoader)loader, internalName);
         assertTrue(differences.isEmpty(), String.join("\n", differences));
     }
 
