@@ -8,6 +8,8 @@
 package org.jd.core.v1.service.converter.classfiletojavasyntax.util;
 
 import org.jd.core.v1.model.javasyntax.expression.*;
+import org.jd.core.v1.model.javasyntax.statement.SwitchStatement;
+import org.jd.core.v1.model.javasyntax.statement.YieldStatement;
 import org.jd.core.v1.model.javasyntax.type.*;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.declaration.ClassFileConstructorOrMethodDeclaration;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.expression.*;
@@ -679,7 +681,40 @@ public class Java5TypeParametersToTypeArgumentsBinder extends AbstractTypeParame
         expression.getRightExpression().accept(this);
     }
 
-    @Override public void visit(SwitchExpression expression) {}
+    /**
+     * The values of 'yield' have the type of the switch expression: 'String s = switch (k) { case 0 -> l.get(0); ... }'
+     * binds 'E' of 'get', as 'List<String> r = switch (k) { case 1 -> List.of("a"); ... }' binds 'E' of 'of'
+     */
+    @Override
+    public void visit(SwitchExpression expression) {
+        Type expectedType = type;
+
+        if (TYPE_OBJECT.equals(expectedType)) {
+            expectedType = expression.getType();
+        } else {
+            expression.setType(expectedType);
+        }
+
+        SwitchStatement switchStatement = expression.getSwitchStatement();
+        Type yieldType = expectedType;
+
+        type = TYPE_OBJECT;
+        switchStatement.getCondition().accept(this);
+
+        switchStatement.accept(new org.jd.core.v1.model.javasyntax.AbstractJavaSyntaxVisitor() {
+            @Override
+            public void visit(YieldStatement statement) {
+                type = yieldType;
+                statement.getExpression().accept(Java5TypeParametersToTypeArgumentsBinder.this);
+                statement.getExpression().accept(REMOVE_NON_WILDCARD_TYPE_ARGUMENTS_VISITOR);
+            }
+
+            // The values of a nested switch expression are bound by its 'yield' of this switch expression
+            @Override public void visit(SwitchExpression e) {}
+        });
+
+        type = expectedType;
+    }
     @Override public void visit(TypePatternExpression expression) {}
     @Override public void visit(RecordPatternExpression expression) {}
     @Override public void visit(ArrayExpression expression) {}
