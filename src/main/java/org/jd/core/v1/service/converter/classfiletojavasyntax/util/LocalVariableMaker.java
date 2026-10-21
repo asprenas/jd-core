@@ -148,7 +148,9 @@ public class LocalVariableMaker {
             } else {
                 Annotations[] visiblesArray = (rvpa == null) ? null : rvpa.getParameterAnnotations();
                 Annotations[] invisiblesArray = (ripa == null) ? null : ripa.getParameterAnnotations();
-                AnnotationConverter annotationConverter = new AnnotationConverter(typeMaker);
+                // The converter of the declarations: the same configuration ('repeatableAnnotations')
+                AnnotationConverter annotationConverter = (comd.getBodyDeclaration().getAnnotationConverter() == null) ?
+                    new AnnotationConverter(typeMaker) : comd.getBodyDeclaration().getAnnotationConverter();
 
                 for (int parameterIndex=0, variableIndex=firstVariableIndex; parameterIndex<=lastParameterIndex; parameterIndex++, variableIndex++) {
                     AbstractLocalVariable lv = localVariableSet.root(variableIndex);

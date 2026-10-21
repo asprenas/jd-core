@@ -7,6 +7,7 @@
 
 package org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.declaration;
 
+import org.jd.core.v1.service.converter.classfiletojavasyntax.util.AnnotationConverter;
 import org.jd.core.v1.model.classfile.ClassFile;
 import org.jd.core.v1.model.javasyntax.declaration.BaseMemberDeclaration;
 import org.jd.core.v1.model.javasyntax.declaration.BodyDeclaration;
@@ -31,6 +32,15 @@ public class ClassFileBodyDeclaration extends BodyDeclaration implements ClassFi
     protected ClassFileBodyDeclaration outerBodyDeclaration;
     protected Map<String, TypeArgument> bindings;
     protected Map<String, BaseType> typeBounds;
+    protected AnnotationConverter annotationConverter; // Converter of the declarations, configured ('repeatableAnnotations')
+
+    public AnnotationConverter getAnnotationConverter() {
+        return annotationConverter;
+    }
+
+    public void setAnnotationConverter(AnnotationConverter annotationConverter) {
+        this.annotationConverter = annotationConverter;
+    }
 
     public ClassFileBodyDeclaration(ClassFile classFile, Map<String, TypeArgument> bindings, Map<String, BaseType> typeBounds, ClassFileBodyDeclaration outerBodyDeclaration) {
         super(classFile.getInternalTypeName(), null);

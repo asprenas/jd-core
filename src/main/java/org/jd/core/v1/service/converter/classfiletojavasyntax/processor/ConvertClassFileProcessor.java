@@ -159,6 +159,8 @@ public class ConvertClassFileProcessor implements Processor {
 
         ClassFileBodyDeclaration bodyDeclaration = new ClassFileBodyDeclaration(classFile, bindings, typeBounds, outerClassFileBodyDeclaration);
 
+        bodyDeclaration.setAnnotationConverter(converter);
+
         bodyDeclaration.setFieldDeclarations(convertFields(parser, converter, classFile));
         bodyDeclaration.setMethodDeclarations(convertMethods(parser, converter, bodyDeclaration, classFile));
         bodyDeclaration.setInnerTypeDeclarations(convertInnerTypes(parser, converter, classFile, bodyDeclaration));
