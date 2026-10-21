@@ -793,9 +793,7 @@ public class StatementVisitor extends ExpressionVisitor {
 
             tokens = new Tokens();
             tokens.add(TRY);
-            if (size == 1) {
-                tokens.add(TextToken.SPACE);
-            }
+            tokens.add(TextToken.SPACE);
             tokens.add(StartBlockToken.START_RESOURCES_BLOCK);
 
             resources.get(0).accept(this);

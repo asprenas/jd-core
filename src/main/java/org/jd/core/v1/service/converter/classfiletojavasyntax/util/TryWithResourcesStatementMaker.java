@@ -310,6 +310,7 @@ public class TryWithResourcesStatementMaker {
             containers.get(i).remove((int)indexes.get(i));
         }
 
+        removeEmptyBranches(tryStatements);
         statements.removeLast();
 
         Expression expression = boe.getRightExpression();
@@ -400,6 +401,36 @@ public class TryWithResourcesStatementMaker {
     protected static boolean isExit(Statement statement) {
         return statement.isReturnStatement() || statement.isReturnExpressionStatement() || statement.isThrowStatement() ||
                statement.isBreakStatement() || statement.isContinueStatement();
+    }
+
+    /**
+     * 'if (c) { r.close(); } else { ... }' at the end of the body, the 'continue' after 'close()' being implicit:
+     * without 'close()', 'if (c) {} else { ... }' is 'if (!c) { ... }'
+     */
+    protected static void removeEmptyBranches(BaseStatement statements) {
+        if ((statements == null) || !statements.isList() || (statements.size() == 0)) {
+            return;
+        }
+
+        Statements list = (Statements)statements;
+        Statement last = list.getLast();
+
+        if (last.isIfElseStatement()) {
+            removeEmptyBranches(last.getStatements());
+            removeEmptyBranches(last.getElseStatements());
+
+            if (isEmpty(last.getStatements())) {
+                list.set(list.size() - 1, new IfStatement(SwitchStatementMaker.negate(last.getCondition()), last.getElseStatements()));
+            } else if (isEmpty(last.getElseStatements())) {
+                list.set(list.size() - 1, new IfStatement(last.getCondition(), last.getStatements()));
+            }
+        } else if (last.isIfStatement()) {
+            removeEmptyBranches(last.getStatements());
+        }
+    }
+
+    protected static boolean isEmpty(BaseStatement statements) {
+        return (statements == null) || (statements.isList() && (statements.size() == 0));
     }
 
     protected static void collectInlinedCloses(BaseStatement statements, AbstractLocalVariable resource, boolean body,
