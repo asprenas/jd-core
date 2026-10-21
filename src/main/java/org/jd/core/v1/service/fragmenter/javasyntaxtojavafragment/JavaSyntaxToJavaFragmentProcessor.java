@@ -42,6 +42,8 @@ public class JavaSyntaxToJavaFragmentProcessor implements Processor {
         visitor.setTextBlocksEnabled((textBlocks != null) && "true".equals(textBlocks.toString()));
         Object unnamedVariables = (configuration == null) ? null : configuration.get("unnamedVariables");
         visitor.setUnnamedVariablesEnabled((unnamedVariables != null) && "true".equals(unnamedVariables.toString()));
+        Object localVariableTypeInference = (configuration == null) ? null : configuration.get("localVariableTypeInference");
+        visitor.setVarEnabled((localVariableTypeInference != null) && "true".equals(localVariableTypeInference.toString()));
         visitor.visit(compilationUnit);
         message.setBody(visitor.getFragments());
     }

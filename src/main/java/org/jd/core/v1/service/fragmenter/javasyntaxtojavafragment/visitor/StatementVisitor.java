@@ -21,7 +21,11 @@ import org.jd.core.v1.model.token.*;
 import org.jd.core.v1.service.fragmenter.javasyntaxtojavafragment.util.ArrowSwitchUtil;
 import org.jd.core.v1.service.fragmenter.javasyntaxtojavafragment.util.JavaFragmentFactory;
 import org.jd.core.v1.service.fragmenter.javasyntaxtojavafragment.util.UnnamedVariableUtil;
+import org.jd.core.v1.model.javasyntax.declaration.ExpressionVariableInitializer;
 import org.jd.core.v1.model.javasyntax.declaration.LocalVariableDeclarator;
+import org.jd.core.v1.model.javasyntax.expression.CastExpression;
+import org.jd.core.v1.model.javasyntax.expression.NewExpression;
+import org.jd.core.v1.model.javasyntax.type.PrimitiveType;
 
 import java.util.Collections;
 import java.util.Iterator;
@@ -56,6 +60,9 @@ public class StatementVisitor extends ExpressionVisitor {
 
     public static final TextToken SPACE_ARROW = new TextToken(" ->");
 
+    protected boolean varSupported;
+    protected boolean varEnabled;
+
     // Declarator of the statement being printed, written '_'
     protected LocalVariableDeclarator unnamedDeclarator;
 
@@ -64,6 +71,56 @@ public class StatementVisitor extends ExpressionVisitor {
     public StatementVisitor(Loader loader, String mainInternalTypeName, int majorVersion, ImportsFragment importsFragment) {
         super(loader, mainInternalTypeName, majorVersion, importsFragment);
         this.arrowSwitchSupported = (majorVersion >= ArrowSwitchUtil.JAVA_14);
+        this.varSupported = (majorVersion >= 54); // (majorVersion >= Java 10)
+    }
+
+    /**
+     * Java 10+ 'var' for the local variables ('localVariableTypeInference' configuration, off by default: the
+     * declared types are in the class file, the source may not use 'var')
+     */
+    public void setVarEnabled(boolean enabled) {
+        this.varEnabled = enabled && varSupported;
+    }
+
+    /**
+     * 'var' declares the type of the initializer: only when it is the declared type, and the initializer does not
+     * need a target type (method invocations are excluded, a generic method would infer other type arguments)
+     */
+    protected static boolean canUseVar(LocalVariableDeclarationStatement statement) {
+        if (!(statement.getLocalVariableDeclarators() instanceof LocalVariableDeclarator)) {
+            return false;
+        }
+
+        LocalVariableDeclarator declarator = (LocalVariableDeclarator)statement.getLocalVariableDeclarators();
+
+        if ((declarator.getDimension() != 0) || !(declarator.getVariableInitializer() instanceof ExpressionVariableInitializer)) {
+            return false;
+        }
+
+        Expression expression = ((ExpressionVariableInitializer)declarator.getVariableInitializer()).getExpression();
+
+        if (!statement.getType().equals(expression.getType())) {
+            return false;
+        }
+
+        if (expression.isNewExpression()) {
+            return ((NewExpression)expression).getBodyDeclaration() == null;
+        }
+
+        if (expression.isCastExpression()) {
+            // An implicit cast is not written: 'long l = i' is not 'var l = i'
+            return ((CastExpression)expression).isExplicit();
+        }
+        if (expression.isIntegerConstantExpression()) {
+            // 'byte b = 1' is not 'var b = 1'
+            return expression.getType() == PrimitiveType.TYPE_INT;
+        }
+
+        return expression.isStringConstantExpression() ||
+               expression.isLocalVariableReferenceExpression() || expression.isFieldReferenceExpression() ||
+               expression.isLongConstantExpression() ||
+               expression.isDoubleConstantExpression() || expression.isFloatConstantExpression() ||
+               expression.isBooleanExpression();
     }
 
     @Override
@@ -393,8 +450,13 @@ public class StatementVisitor extends ExpressionVisitor {
             tokens.add(TextToken.SPACE);
         }
 
-        if (statement.isVar()) {
+        boolean var = statement.isVar() || (varEnabled && canUseVar(statement));
+        boolean diamond = diamondOperatorSupported;
+
+        if (var) {
             tokens.add(VAR);
+            // 'var list = new ArrayList<String>()': with '<>', the type arguments would be inferred as Object
+            diamondOperatorSupported = statement.isVar() && diamondOperatorSupported;
         } else {
             BaseType type = statement.getType();
 
@@ -404,6 +466,7 @@ public class StatementVisitor extends ExpressionVisitor {
         tokens.add(TextToken.SPACE);
 
         statement.getLocalVariableDeclarators().accept(this);
+        diamondOperatorSupported = diamond;
 
         tokens.add(TextToken.SEMICOLON);
         tokens.add(EndBlockToken.END_DECLARATION_OR_STATEMENT_BLOCK);

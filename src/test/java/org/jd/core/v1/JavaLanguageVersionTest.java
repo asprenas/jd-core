@@ -195,6 +195,29 @@ public class JavaLanguageVersionTest {
         assertTrue(differences.isEmpty(), String.join("\n", differences));
     }
 
+    /** Phase 4-6 (b): 'localVariableTypeInference' configuration, 'var' only when the type is the same */
+    @ParameterizedTest(name = "java11 LocalVariableTypeInference{0} localVariableTypeInference=true")
+    @ValueSource(strings = {"", "-javac" + NEWEST_JDK})
+    public void varConfiguration(String variant) throws Exception {
+        assumeTrue(parseSelection(System.getenv("JDCORE_SAMPLES")).contains(11), "java11 samples not selected");
+        assumeTrue(runtimeFeatureVersion() >= 11, "recompilation needs a JDK 11+");
+
+        String internalName = "org/jd/core/test/java11/LocalVariableTypeInference";
+        Loader loader = loader("/zip/data-java-language-11" + variant + ".zip");
+        String source = decompile(loader, new PlainTextPrinter(), internalName, Collections.singletonMap("localVariableTypeInference", "true"));
+
+        System.out.println("- - - - - - - - ");
+        System.out.println(source);
+        System.out.println("- - - - - - - - ");
+
+        assertTrue(source.contains("var list = new ArrayList<String>();"), "generic 'new' without '<>'");
+        assertTrue(source.matches("(?s).*var \\w+ = new Object\\(\\) \\{.*"), "anonymous class type");
+        assertTrue(CompilerUtil.compile("11", new JavaSourceFileObject(internalName, source)), "decompiled source does not recompile");
+
+        List<String> differences = RunComparison.compare(runResource(11, internalName), (ZipLoader)loader, internalName);
+        assertTrue(differences.isEmpty(), String.join("\n", differences));
+    }
+
     private static String runResource(int version, String internalName) {
         return "/java/org/jd/core/test/java" + version + "/" + internalName.substring(internalName.lastIndexOf('/') + 1) + ".run";
     }
