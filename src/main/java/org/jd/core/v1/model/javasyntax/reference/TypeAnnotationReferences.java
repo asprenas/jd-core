@@ -20,6 +20,7 @@ public class TypeAnnotationReferences {
     public static final int METHOD_TYPE_PARAMETER   = 0x01;
     public static final int FIELD                   = 0x13;
     public static final int METHOD_RETURN           = 0x14;
+    public static final int METHOD_RECEIVER         = 0x15;
     public static final int METHOD_FORMAL_PARAMETER = 0x16;
     public static final int THROWS                  = 0x17;
     // 'index' 65535 for 'extends', or the index of the interface

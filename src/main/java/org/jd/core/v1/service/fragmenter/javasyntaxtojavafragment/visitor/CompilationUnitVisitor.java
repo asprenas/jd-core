@@ -741,6 +741,15 @@ public class CompilationUnitVisitor extends StatementVisitor {
         }
     }
 
+    /** 'void m(@A Foo this)': the receiver parameter, only written for its annotations */
+    protected void visitReceiverParameter(AnnotationReferences<AnnotationReference> references) {
+        references.accept(this);
+        tokens.add(TextToken.SPACE);
+        tokens.add(new ReferenceToken(ReferenceToken.TYPE, currentInternalTypeName, currentTypeName, null, currentInternalTypeName));
+        tokens.add(TextToken.SPACE);
+        tokens.add(THIS);
+    }
+
     @Override
     public void visit(FormalParameter declaration) {
         BaseAnnotationReference annotationReferences = declaration.getAnnotationReferences();
@@ -1242,11 +1251,21 @@ public class CompilationUnitVisitor extends StatementVisitor {
             currentMethodParamNames.clear();
 
             BaseFormalParameter formalParameters = declaration.getFormalParameters();
+            AnnotationReferences<AnnotationReference> receiverReferences = (typeAnnotationReferences == null) ? null : typeAnnotationReferences.get(TypeAnnotationReferences.METHOD_RECEIVER, -1, "");
 
-            if (formalParameters == null) {
+            if ((formalParameters == null) && (receiverReferences == null)) {
                 tokens.add(TextToken.LEFTRIGHTROUNDBRACKETS);
+            } else if (formalParameters == null) {
+                tokens.add(StartBlockToken.START_PARAMETERS_BLOCK);
+                visitReceiverParameter(receiverReferences);
+                tokens.add(EndBlockToken.END_PARAMETERS_BLOCK);
             } else {
                 tokens.add(StartBlockToken.START_PARAMETERS_BLOCK);
+
+                if (receiverReferences != null) {
+                    visitReceiverParameter(receiverReferences);
+                    tokens.add(TextToken.COMMA_SPACE);
+                }
                 fragments.addTokensFragment(tokens);
 
                 visitFormalParameters(formalParameters, typeAnnotationReferences);
