@@ -24,6 +24,8 @@ public abstract class AbstractLocalVariable {
     protected int fromOffset;
     protected int toOffset;
     protected String name;
+    // Not in the 'LocalVariableTable' (javac temporary variable, no debug information) or renamed
+    protected boolean generatedName;
     protected DefaultList<LocalVariableReference> references = new DefaultList<>();
     protected HashSet<AbstractLocalVariable> variablesOnRight = null;
     protected TypeAnnotationReferences typeAnnotationReferences; // 'localvar_target' annotations of the declared type
@@ -78,6 +80,7 @@ public abstract class AbstractLocalVariable {
 
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
+    public boolean isGeneratedName() { return generatedName; }
 
     public abstract int getDimension();
 

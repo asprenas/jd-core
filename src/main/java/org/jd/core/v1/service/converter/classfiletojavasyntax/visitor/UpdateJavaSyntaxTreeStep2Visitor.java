@@ -30,6 +30,7 @@ public class UpdateJavaSyntaxTreeStep2Visitor extends AbstractJavaSyntaxVisitor 
     protected AddCastExpressionVisitor addCastExpressionVisitor;
     protected static final RemoveRedundantCastVisitor REMOVE_REDUNDANT_CAST_VISITOR = new RemoveRedundantCastVisitor();
     protected static final MoveDeclarationIntoSwitchBlockVisitor MOVE_DECLARATION_INTO_SWITCH_BLOCK_VISITOR = new MoveDeclarationIntoSwitchBlockVisitor();
+    protected static final InlineYieldTemporaryVisitor INLINE_YIELD_TEMPORARY_VISITOR = new InlineYieldTemporaryVisitor();
     protected UpdateSealedDeclarationVisitor updateSealedDeclarationVisitor;
 
     protected TypeDeclaration typeDeclaration;
@@ -78,6 +79,8 @@ public class UpdateJavaSyntaxTreeStep2Visitor extends AbstractJavaSyntaxVisitor 
             REMOVE_REDUNDANT_CAST_VISITOR.visit(declaration);
 
             // Declare the variables of one switch block in the block
+            // Yield the values stored in javac temporary variables
+            INLINE_YIELD_TEMPORARY_VISITOR.visit(declaration);
             MOVE_DECLARATION_INTO_SWITCH_BLOCK_VISITOR.visit(declaration);
 
             // Autoboxing

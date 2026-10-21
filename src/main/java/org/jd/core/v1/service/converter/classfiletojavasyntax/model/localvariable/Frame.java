@@ -250,6 +250,7 @@ public class Frame {
                     if (lv.name == null) {
                         lv.getType().accept(visitor);
                         lv.name = visitor.getName();
+                        lv.generatedName = true;
                     }
                     lv = lv.getNext();
                 }
