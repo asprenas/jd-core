@@ -2091,7 +2091,7 @@ public class ByteCodeParser {
 
         // 'Type name': declared by the pattern
         String descriptor = value.getAccessorDescriptor();
-        Type type = (value.getType() == null) ? typeMaker.makeFromSignature(descriptor.substring(descriptor.indexOf(')') + 1)) : typeMaker.makeFromInternalTypeName(value.getType());
+        Type type = (value.getType() == null) ? typeMaker.makeFromSignature(descriptor.substring(descriptor.indexOf(')') + 1)) : typeMaker.makeFromDescriptorOrInternalTypeName(value.getType());
         AbstractLocalVariable binding = localVariableMaker.getLocalVariableInAssignment(typeBounds, value.getBindingIndex(), value.getBindingOffset(), type);
         binding.setDeclared(true);
         return new TypePatternExpression(lineNumber, binding.getType(), new ClassFileLocalVariableReferenceExpression(lineNumber, value.getBindingOffset(), binding));
