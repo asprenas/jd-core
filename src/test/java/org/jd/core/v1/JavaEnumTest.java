@@ -68,6 +68,7 @@ public class JavaEnumTest {
 
         // Recompile decompiled source code and check errors
         assertTrue(CompilerUtil.compile("1.7", new JavaSourceFileObject(internalClassName, source)));
+        RunComparison.assertSameBehavior("data-java-jdk-1.7.0", loader, internalClassName);
     }
 
     @Test
@@ -98,6 +99,7 @@ public class JavaEnumTest {
 
         // Recompile decompiled source code and check errors
         assertTrue(CompilerUtil.compile("1.7", new JavaSourceFileObject(internalClassName, source)));
+        RunComparison.assertSameBehavior("data-java-jdk-9.0.1", loader, internalClassName);
     }
 
     @Test
@@ -128,6 +130,7 @@ public class JavaEnumTest {
 
         // Recompile decompiled source code and check errors
         assertTrue(CompilerUtil.compile("1.8", new JavaSourceFileObject(internalClassName, source)));
+        RunComparison.assertSameBehavior("data-java-jdk-10.0.2", loader, internalClassName);
     }
 
     protected String decompile(Loader loader, Printer printer, String internalTypeName) throws Exception {

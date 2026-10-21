@@ -89,6 +89,24 @@ public final class RunComparison {
         return differences;
     }
 
+    /**
+     * For the tests of the sample zips ('/zip/data-java-jdk-1.7.0.zip'), after 'CompilerUtil.compile': compares
+     * the calls of '/run/data-java-jdk-1.7.0/Enum.run' for 'org/jd/core/test/Enum'.
+     */
+    public static void assertSameBehavior(String zipName, org.jd.core.v1.api.loader.Loader loader, String internalName) throws Exception {
+        String runResource = "/run/" + zipName + "/" + internalName.substring(internalName.lastIndexOf('/') + 1) + ".run";
+
+        if (readCalls(runResource).isEmpty()) {
+            throw new AssertionError("no calls in " + runResource);
+        }
+
+        List<String> differences = compare(runResource, (ZipLoader)loader, internalName);
+
+        if (!differences.isEmpty()) {
+            throw new AssertionError(internalName + ": different behavior\n  " + String.join("\n  ", differences));
+        }
+    }
+
     private static List<String> readCalls(String runResource) throws Exception {
         List<String> calls = new ArrayList<>();
 
