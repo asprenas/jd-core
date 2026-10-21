@@ -1,4 +1,4 @@
 # Phase 3-7: record patterns with unnamed patterns
 ~ instanceof Point\(int \w+, _\)
-~ case Circle\(Point\(int \w+, _\), _\):
-~ case Square\(_, int \w+\):
+~ case Circle\(Point\(int \w+, _\), _\)( ->|:)
+~ case Square\(_, int \w+\)( ->|:)
