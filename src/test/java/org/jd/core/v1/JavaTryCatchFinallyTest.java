@@ -53,7 +53,7 @@ public class JavaTryCatchFinallyTest {
         assertTrue(source.matches(PatternMaker.make(":  57 */", "e.printStackTrace();")));
         assertTrue(source.matches(PatternMaker.make(":  59 */", "System.out.println(\"finally\");")));
 
-        assertTrue(source.matches(PatternMaker.make(": 121 */", "try(FileInputStream input = new FileInputStream(pathIn);")));
+        assertTrue(source.matches(PatternMaker.make(": 121 */", "try (FileInputStream input = new FileInputStream(pathIn);")));
         assertTrue(source.matches(PatternMaker.make(": 122 */", "BufferedInputStream bufferedInput = new BufferedInputStream(input);")));
         assertTrue(source.matches(PatternMaker.make(": 123 */", "FileOutputStream output = new FileOutputStream(pathOut);")));
         assertTrue(source.matches(PatternMaker.make(": 124 */", "BufferedOutputStream bufferedOutput = new BufferedOutputStream(output))")));
@@ -88,7 +88,7 @@ public class JavaTryCatchFinallyTest {
         assertTrue(source.matches(PatternMaker.make(":  57 */", "e.printStackTrace();")));
         assertTrue(source.matches(PatternMaker.make(":  59 */", "System.out.println(\"finally\");")));
 
-        assertTrue(source.matches(PatternMaker.make(": 121 */", "try(FileInputStream input = new FileInputStream(pathIn);")));
+        assertTrue(source.matches(PatternMaker.make(": 121 */", "try (FileInputStream input = new FileInputStream(pathIn);")));
         assertTrue(source.matches(PatternMaker.make(": 122 */", "BufferedInputStream bufferedInput = new BufferedInputStream(input);")));
         assertTrue(source.matches(PatternMaker.make(": 123 */", "FileOutputStream output = new FileOutputStream(pathOut);")));
         assertTrue(source.matches(PatternMaker.make(": 124 */", "BufferedOutputStream bufferedOutput = new BufferedOutputStream(output))")));
