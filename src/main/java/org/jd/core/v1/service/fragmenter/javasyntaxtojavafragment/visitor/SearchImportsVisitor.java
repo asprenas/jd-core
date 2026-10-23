@@ -380,7 +380,8 @@ public class SearchImportsVisitor extends AbstractJavaSyntaxVisitor {
                             importTypeNames.add(typeName);
                         }
                     } else if (internalTypeName.startsWith(internalPackagePrefix)) {
-                        if ((internalTypeName.indexOf('/', internalPackagePrefix.length()) != -1) && !localTypeNames.contains(typeName)) {
+                        // Sub package: a type of the same package with the same simple name hides it
+                        if ((internalTypeName.indexOf('/', internalPackagePrefix.length()) != -1) && !localTypeNames.contains(typeName) && !loader.canLoad(internalPackagePrefix + typeName)) {
                             importsFragment.addImport(internalTypeName, type.getQualifiedName());
                             importTypeNames.add(typeName);
                         }
