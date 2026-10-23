@@ -93,12 +93,11 @@ public class JarFileToJavaSourceTest {
 
     // TODO Disabled after migrating tests to JUnit 5. To be replaced by a JUnit 5 jar test
     //      (test(org.junit.jupiter.api.Test.class) + 'org.apiguardian:apiguardian-api' and
-    //      'org.jspecify:jspecify' on the test classpath), which currently fails: 3/160 classes
+    //      'org.jspecify:jspecify' on the test classpath), which currently fails: 2/160 classes
     //      do not recompile (junit-jupiter-api 5.14.4).
     //      Decompiler issues to fix:
     //      1. Generic type lost (MethodOrderer, AssertionUtils)
     //         ex: lambda parameter typed 'Object': 'descriptor.getMethod()' does not compile
-    //      2. 'unreported exception Throwable' (AssertTimeoutPreemptively)
     //      Out of scope: 'module-info.class' (recompiled with -source 8), Kotlin class 'AssertionsKt'
 //    @Test
 //    public void testJUnit4() throws Exception {

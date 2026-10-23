@@ -1582,7 +1582,26 @@ public class ByteCodeParser {
         }
 
         // Create method reference
+        removeReceiverNullCheck(statements, (Expression)indyParameters);
         stack.push(new MethodReferenceExpression(lineNumber, methodReferenceType, (Expression)indyParameters, typeName, name1, descriptor1));
+    }
+
+    /** 'Objects.requireNonNull(x)' (javac 9+) or 'x.getClass()' (javac 8) written by javac before the bound method reference 'x::m' */
+    private static void removeReceiverNullCheck(Statements statements, Expression receiver) {
+        if (!statements.isEmpty() && statements.getLast().isExpressionStatement()) {
+            Expression expression = statements.getLast().getExpression();
+
+            if (expression.isMethodInvocationExpression()) {
+                BaseExpression parameters = expression.getParameters();
+
+                if ("requireNonNull".equals(expression.getName()) && "java/util/Objects".equals(expression.getInternalTypeName()) &&
+                    (parameters != null) && (parameters.size() == 1) && (parameters.getFirst() == receiver)) {
+                    statements.removeLast();
+                } else if ("getClass".equals(expression.getName()) && (parameters == null) && (expression.getExpression() == receiver)) {
+                    statements.removeLast();
+                }
+            }
+        }
     }
 
     /**
@@ -1963,7 +1982,9 @@ public class ByteCodeParser {
     }
 
     private void parseASTORE(Statements statements, DefaultStack<Expression> stack, int lineNumber, int offset, AbstractLocalVariable localVariable, Expression valueRef) {
-        typeParametersToTypeArgumentsBinder.bindParameterTypesWithArgumentTypes(localVariable.getType(), valueRef);
+        Type type = localVariable.getType();
+        // A new synthetic variable ('return' value stored before 'finally'): the type arguments come from the arguments
+        typeParametersToTypeArgumentsBinder.bindParameterTypesWithArgumentTypes((type == TYPE_UNDEFINED_OBJECT) ? TYPE_OBJECT : type, valueRef);
         localVariable.typeOnRight(typeBounds, valueRef.getType());
 
         ClassFileLocalVariableReferenceExpression vre = new ClassFileLocalVariableReferenceExpression(lineNumber, offset, localVariable);
