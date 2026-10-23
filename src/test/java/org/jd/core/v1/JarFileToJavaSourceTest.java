@@ -92,22 +92,20 @@ public class JarFileToJavaSourceTest {
     }
 
     // TODO Disabled after migrating tests to JUnit 5. To be replaced by a JUnit 5 jar test
-    //      (test(org.junit.jupiter.api.Test.class) + 'org.apiguardian:apiguardian-api' on the
-    //      test classpath), which currently fails: 13/162 classes do not recompile.
+    //      (test(org.junit.jupiter.api.Test.class) + 'org.apiguardian:apiguardian-api' and
+    //      'org.jspecify:jspecify' on the test classpath), which currently fails: 6/160 classes
+    //      do not recompile (junit-jupiter-api 5.14.4).
     //      Decompiler issues to fix:
-    //      1. Lambda nested in a capturing lambda is printed as '()'
-    //         (DynamicTest, RandomOrdererUtils, TestReporter, AbstractJreCondition)
-    //         ex: '() -> testExecutor.accept(input)' -> '()'
-    //      2. Captured variables and lambda parameters are mixed up (wrong local variable offset
+    //      1. Captured variables and lambda parameters are mixed up (wrong local variable offset
     //         in synthetic 'lambda$x$n' methods) (MethodBasedCondition)
     //         ex: 'methodName -> getConditionMethod(methodName, context)' -> '... getConditionMethod(context, context)'
-    //      3. Boxing cast removed, overloaded call becomes ambiguous (Assertions)
+    //      2. Boxing cast removed, overloaded call becomes ambiguous (Assertions)
     //         ex: 'AssertEquals.assertEquals((Short) expected, actual)' -> 'AssertEquals.assertEquals(expected, actual)'
-    //      4. Generic type lost / raw casts (AssertLinesMatch, DisplayNameGenerator, MethodOrderer)
-    //         ex: 'collect(Collectors.toList())' -> 'collect((Collector)Collectors.toList())'
-    //      5. Interface default super call 'X.super.m()' printed as 'super.m()' (ParameterContext)
-    //      6. Null check of method reference receiver ('Objects.requireNonNull') printed and
-    //         'unreported exception Throwable' (AssertTimeoutPreemptively)
+    //      3. Generic type lost (MethodOrderer, AssertionUtils)
+    //         ex: lambda parameter typed 'Object': 'descriptor.getMethod()' does not compile
+    //      4. 'unreported exception Throwable' (AssertTimeoutPreemptively)
+    //      5. Two types with the same simple name ('org.junit.jupiter.api.MediaType' and
+    //         'org.junit.jupiter.api.extension.MediaType') printed with the simple name (TestReporter)
     //      Out of scope: 'module-info.class' (recompiled with -source 8), Kotlin class 'AssertionsKt'
 //    @Test
 //    public void testJUnit4() throws Exception {
