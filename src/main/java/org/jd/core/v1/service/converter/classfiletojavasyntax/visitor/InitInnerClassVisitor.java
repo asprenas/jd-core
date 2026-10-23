@@ -340,8 +340,16 @@ public class InitInnerClassVisitor extends AbstractJavaSyntaxVisitor {
 
         @Override
         protected Expression updateExpression(Expression expression) {
+            if (expression.isFieldReferenceExpression() && expression.getName().startsWith("this$") &&
+                    expression.getType().isObjectType() && (((ObjectType)expression.getType()).getName() == null)) {
+                // Outer instance of an anonymous class: 'Outer.null.this' is not valid, the member is accessed unqualified
+                ThisExpression thisExpression = new ThisExpression(expression.getLineNumber(), expression.getType());
+                thisExpression.setExplicit(false);
+                return thisExpression;
+            }
             if (expression.isLocalVariableReferenceExpression()) {
-                if ((expression.getName() != null) && expression.getName().equals(outerTypeFieldName) && expression.getType().isObjectType()) {
+                // 'this$0': name given by LocalVariableMaker to the missing outer instance parameter, the field can be 'this$1'
+                if ((expression.getName() != null) && (expression.getName().equals(outerTypeFieldName) || expression.getName().equals("this$0")) && expression.getType().isObjectType()) {
                     ObjectType objectType = (ObjectType)expression.getType();
                     if (bodyDeclaration.getOuterBodyDeclaration().getInternalTypeName().equals(objectType.getInternalName())) {
                         return new FieldReferenceExpression(objectType, new ObjectTypeReferenceExpression(expression.getLineNumber(), objectType.createType(null)), objectType.getInternalName(), "this", objectType.getDescriptor());
@@ -675,6 +683,8 @@ public class InitInnerClassVisitor extends AbstractJavaSyntaxVisitor {
 
                 // Remove last synthetic parameter
                 expression.setParameters(removeLastSyntheticParameter(scie.getParameters(), scie.getParameterTypes()));
+                // 'super(..., new Function() {...})': anonymous class in the arguments
+                safeAccept(expression.getParameters());
             }
         }
 
@@ -692,6 +702,7 @@ public class InitInnerClassVisitor extends AbstractJavaSyntaxVisitor {
 
                 // Remove last synthetic parameter
                 cie.setParameters(removeLastSyntheticParameter(cie.getParameters(), cie.getParameterTypes()));
+                safeAccept(cie.getParameters());
             }
         }
 
