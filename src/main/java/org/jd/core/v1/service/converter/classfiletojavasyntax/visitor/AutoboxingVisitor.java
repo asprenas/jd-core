@@ -8,7 +8,9 @@
 package org.jd.core.v1.service.converter.classfiletojavasyntax.visitor;
 
 import org.jd.core.v1.model.javasyntax.declaration.*;
+import org.jd.core.v1.model.javasyntax.expression.CastExpression;
 import org.jd.core.v1.model.javasyntax.expression.Expression;
+import org.jd.core.v1.model.javasyntax.expression.MethodInvocationExpression;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.declaration.ClassFileBodyDeclaration;
 
 import java.util.HashMap;
@@ -59,16 +61,26 @@ public class AutoboxingVisitor extends AbstractUpdateExpressionVisitor {
     }
 
     @Override
+    public void visit(MethodInvocationExpression expression) {
+        Expression receiver = expression.getExpression();
+
+        if (isValueOf(receiver)) {
+            // '((Double)value).hashCode()': a primitive has no method, the boxing of the receiver is kept as a cast
+            Expression parameter = receiver.getParameters().getFirst();
+            expression.setExpression(new CastExpression(receiver.getLineNumber(), receiver.getType(), parameter));
+        }
+
+        super.visit(expression);
+    }
+
+    @Override
     protected Expression updateExpression(Expression expression) {
         if (expression.isMethodInvocationExpression() && expression.getInternalTypeName().startsWith("java/lang/")) {
             int parameterSize = (expression.getParameters() == null) ? 0 : expression.getParameters().size();
 
             if (expression.getExpression().isObjectTypeReferenceExpression()) {
                 // static method invocation
-                if ((parameterSize == 1) &&
-                        expression.getName().equals("valueOf") &&
-                        expression.getDescriptor().equals(VALUEOF_DESCRIPTOR_MAP.get(expression.getInternalTypeName())))
-                {
+                if ((parameterSize == 1) && isValueOf(expression)) {
                     return expression.getParameters().getFirst();
                 }
             } else {
@@ -83,5 +95,11 @@ public class AutoboxingVisitor extends AbstractUpdateExpressionVisitor {
         }
 
         return expression;
+    }
+
+    private static boolean isValueOf(Expression expression) {
+        return expression.isMethodInvocationExpression() && expression.getExpression().isObjectTypeReferenceExpression() &&
+               expression.getName().equals("valueOf") && (expression.getParameters() != null) && (expression.getParameters().size() == 1) &&
+               expression.getDescriptor().equals(VALUEOF_DESCRIPTOR_MAP.get(expression.getInternalTypeName()));
     }
 }
