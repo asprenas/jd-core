@@ -23,6 +23,8 @@ public class StringConcatenationUtil {
             if ((mie.getParameters() != null) && !mie.getParameters().isList() && "append".equals(mie.getName())) {
                 Expression concatenatedStringExpression = mie.getParameters().getFirst();
                 Expression expr = mie.getExpression();
+                Expression firstOperand = concatenatedStringExpression;
+                Expression secondOperand = null;
                 boolean firstParameterHaveGenericType = false;
 
                 while (expr.isMethodInvocationExpression()) {
@@ -32,7 +34,9 @@ public class StringConcatenationUtil {
                         break;
                     }
 
-                    firstParameterHaveGenericType = mie.getParameters().getFirst().getType().isGenericType();
+                    secondOperand = firstOperand;
+                    firstOperand = mie.getParameters().getFirst();
+                    firstParameterHaveGenericType = firstOperand.getType().isGenericType();
                     concatenatedStringExpression = new BinaryOperatorExpression(mie.getLineNumber(), ObjectType.TYPE_STRING, (Expression) mie.getParameters(), "+", concatenatedStringExpression, 4);
                     expr = mie.getExpression();
                 }
@@ -43,6 +47,11 @@ public class StringConcatenationUtil {
                     if ("Ljava/lang/StringBuilder;".equals(internalTypeName) || "Ljava/lang/StringBuffer;".equals(internalTypeName)) {
                         if (expr.getParameters() == null) {
                             if (!firstParameterHaveGenericType) {
+                                if (!isString(firstOperand) && ((secondOperand == null) || !isString(secondOperand))) {
+                                    // 'new StringBuilder().append('{').append(key)': '{' + key is not a string
+                                    // concatenation, the empty string is added in front
+                                    return new BinaryOperatorExpression(firstOperand.getLineNumber(), ObjectType.TYPE_STRING, StringConstantExpression.EMPTY_STRING, "+", concatenatedStringExpression, 4);
+                                }
                                 return concatenatedStringExpression;
                             }
                         } else if (!expr.getParameters().isList()) {
@@ -114,6 +123,10 @@ public class StringConcatenationUtil {
 
                 return expression;
         }
+    }
+
+    private static boolean isString(Expression expression) {
+        return ObjectType.TYPE_STRING.equals(expression.getType());
     }
 
     private static Expression createFirstStringConcatenationItem(Expression expression) {
