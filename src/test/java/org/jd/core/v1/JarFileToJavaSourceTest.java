@@ -93,18 +93,15 @@ public class JarFileToJavaSourceTest {
 
     // TODO Disabled after migrating tests to JUnit 5. To be replaced by a JUnit 5 jar test
     //      (test(org.junit.jupiter.api.Test.class) + 'org.apiguardian:apiguardian-api' and
-    //      'org.jspecify:jspecify' on the test classpath), which currently fails: 6/160 classes
+    //      'org.jspecify:jspecify' on the test classpath), which currently fails: 5/160 classes
     //      do not recompile (junit-jupiter-api 5.14.4).
     //      Decompiler issues to fix:
-    //      1. Captured variables and lambda parameters are mixed up (wrong local variable offset
-    //         in synthetic 'lambda$x$n' methods) (MethodBasedCondition)
-    //         ex: 'methodName -> getConditionMethod(methodName, context)' -> '... getConditionMethod(context, context)'
-    //      2. Boxing cast removed, overloaded call becomes ambiguous (Assertions)
+    //      1. Boxing cast removed, overloaded call becomes ambiguous (Assertions)
     //         ex: 'AssertEquals.assertEquals((Short) expected, actual)' -> 'AssertEquals.assertEquals(expected, actual)'
-    //      3. Generic type lost (MethodOrderer, AssertionUtils)
+    //      2. Generic type lost (MethodOrderer, AssertionUtils)
     //         ex: lambda parameter typed 'Object': 'descriptor.getMethod()' does not compile
-    //      4. 'unreported exception Throwable' (AssertTimeoutPreemptively)
-    //      5. Two types with the same simple name ('org.junit.jupiter.api.MediaType' and
+    //      3. 'unreported exception Throwable' (AssertTimeoutPreemptively)
+    //      4. Two types with the same simple name ('org.junit.jupiter.api.MediaType' and
     //         'org.junit.jupiter.api.extension.MediaType') printed with the simple name (TestReporter)
     //      Out of scope: 'module-info.class' (recompiled with -source 8), Kotlin class 'AssertionsKt'
 //    @Test

@@ -1557,7 +1557,7 @@ public class ByteCodeParser {
                     stack.push(new LambdaIdentifiersExpression(
                             lineNumber, methodReferenceType, indyMethodTypes.returnedType,
                             prepareLambdaParameterNames(cfmd.getFormalParameters(), parameterCount),
-                            prepareLambdaStatements(cfmd.getFormalParameters(), indyParameters, cfmd.getStatements())));
+                            prepareLambdaStatements(cfmd.getFormalParameters(), indyParameters, (cfmd.getFlags() & FLAG_STATIC) == 0, cfmd.getStatements())));
                     return;
                 }
             }
@@ -1803,38 +1803,27 @@ public class ByteCodeParser {
         }
     }
 
-    private BaseStatement prepareLambdaStatements(BaseFormalParameter formalParameters, BaseExpression indyParameters, BaseStatement baseStatement) {
+    /**
+     * @param hasReceiver true for an instance lambda method: the first 'invokedynamic' argument is 'this', not a captured variable
+     */
+    private BaseStatement prepareLambdaStatements(BaseFormalParameter formalParameters, BaseExpression indyParameters, boolean hasReceiver, BaseStatement baseStatement) {
         if (baseStatement != null) {
             if ((formalParameters != null) && (indyParameters != null)) {
-                int size = indyParameters.size();
+                int offset = hasReceiver ? 1 : 0;
+                int size = indyParameters.size() - offset;
 
                 if ((size > 0) && (size <= formalParameters.size())) {
                     HashMap<String, String> mapping = new HashMap<>();
-                    Expression expression = indyParameters.getFirst();
 
-                    if (expression.isLocalVariableReferenceExpression()) {
-                        String name = formalParameters.getFirst().getName();
-                        String newName = expression.getName();
+                    for (int i = 0; i < size; i++) {
+                        Expression expression = indyParameters.isList() ? indyParameters.getList().get(i + offset) : indyParameters.getFirst();
 
-                        if (!name.equals(newName)) {
-                            mapping.put(name, newName);
-                        }
-                    }
+                        if (expression.isLocalVariableReferenceExpression()) {
+                            String name = (formalParameters.isList() ? formalParameters.getList().get(i) : formalParameters.getFirst()).getName();
+                            String newName = expression.getName();
 
-                    if (size > 1) {
-                        DefaultList<FormalParameter> formalParameterList = formalParameters.getList();
-                        DefaultList<Expression> list = indyParameters.getList();
-
-                        for (int i = 1; i < size; i++) {
-                            expression = list.get(i);
-
-                            if (expression.isLocalVariableReferenceExpression()) {
-                                String name = formalParameterList.get(i).getName();
-                                String newName = expression.getName();
-
-                                if (!name.equals(newName)) {
-                                    mapping.put(name, newName);
-                                }
+                            if (!name.equals(newName)) {
+                                mapping.put(name, newName);
                             }
                         }
                     }
