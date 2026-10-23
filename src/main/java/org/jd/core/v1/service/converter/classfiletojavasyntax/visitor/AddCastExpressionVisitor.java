@@ -380,6 +380,16 @@ public class AddCastExpressionVisitor extends AbstractJavaSyntaxVisitor {
         } else {
             Type expressionType = expression.getType();
 
+            if (!unique && type.isObjectType() && !isWrapperType((ObjectType)type) && isBoxing(expression)) {
+                // 'eq((Short)expected, actual)' with 'eq(short, short)' and 'eq(Object, Object)': AutoboxingVisitor
+                // removes 'Short.valueOf(expected)', the cast keeps the boxing that selects the overload
+                Expression parameter = expression.getParameters().getFirst();
+                parameter.accept(this);
+                searchFirstLineNumberVisitor.init();
+                expression.accept(searchFirstLineNumberVisitor);
+                return new CastExpression(searchFirstLineNumberVisitor.getLineNumber(), expressionType, parameter);
+            }
+
             if (!expressionType.equals(type)) {
                 if (type.isObjectType()) {
                     if (expressionType.isObjectType()) {
@@ -439,6 +449,17 @@ public class AddCastExpressionVisitor extends AbstractJavaSyntaxVisitor {
         }
 
         return expression;
+    }
+
+    private static boolean isWrapperType(ObjectType type) {
+        return (type.getDimension() == 0) && AutoboxingVisitor.VALUEOF_DESCRIPTOR_MAP.containsKey(type.getInternalName());
+    }
+
+    /** 'Short.valueOf(s)' with the descriptor '(S)Ljava/lang/Short;', removed by AutoboxingVisitor */
+    private static boolean isBoxing(Expression expression) {
+        return expression.isMethodInvocationExpression() && expression.getExpression().isObjectTypeReferenceExpression() &&
+               expression.getName().equals("valueOf") && (expression.getParameters() != null) && (expression.getParameters().size() == 1) &&
+               expression.getDescriptor().equals(AutoboxingVisitor.VALUEOF_DESCRIPTOR_MAP.get(expression.getInternalTypeName()));
     }
 
     /** An invocation of a generic method whose raw type fits: only its type arguments differ */
