@@ -48,7 +48,8 @@ public class BindTypesToTypesVisitor extends AbstractNopTypeVisitor {
             typeArguments.accept(bindTypeArgumentsToTypeArgumentsVisitor);
             BaseTypeArgument ta = bindTypeArgumentsToTypeArgumentsVisitor.getTypeArgument();
 
-            if (typeArguments == ta) {
+            // 'S<Object>': an explicit type argument, not an unbound type parameter
+            if ((typeArguments == ta) || ((ta == null) && TYPE_OBJECT.equals(typeArguments))) {
                 result = type;
             } else {
                 result = type.createType(ta);
@@ -70,7 +71,8 @@ public class BindTypesToTypesVisitor extends AbstractNopTypeVisitor {
                 typeArguments.accept(bindTypeArgumentsToTypeArgumentsVisitor);
                 BaseTypeArgument ta = bindTypeArgumentsToTypeArgumentsVisitor.getTypeArgument();
 
-                if (typeArguments == ta) {
+                // 'S<Object>': an explicit type argument, not an unbound type parameter
+                if ((typeArguments == ta) || ((ta == null) && TYPE_OBJECT.equals(typeArguments))) {
                     result = type;
                 } else {
                     result = type.createType(ta);
