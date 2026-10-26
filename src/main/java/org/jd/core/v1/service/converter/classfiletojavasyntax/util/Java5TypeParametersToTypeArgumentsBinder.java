@@ -16,10 +16,12 @@ import org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.e
 import org.jd.core.v1.service.converter.classfiletojavasyntax.model.localvariable.AbstractLocalVariable;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.visitor.*;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Set;
 
 import static org.jd.core.v1.model.javasyntax.declaration.Declaration.FLAG_STATIC;
 import static org.jd.core.v1.model.javasyntax.type.ObjectType.*;
@@ -195,6 +197,7 @@ public class Java5TypeParametersToTypeArgumentsBinder extends AbstractTypeParame
             BaseTypeParameter typeParameters, BaseTypeArgument typeArguments, BaseTypeParameter methodTypeParameters,
             Type returnType, Type returnExpressionType, BaseType parameterTypes, BaseExpression parameters) {
         Map<String, BaseType> typeBounds = new HashMap<>();
+        Set<String> fixedNames = new HashSet<>();
         boolean statik = (expression != null) && expression.isObjectTypeReferenceExpression();
 
         if (!statik) {
@@ -210,10 +213,19 @@ public class Java5TypeParametersToTypeArgumentsBinder extends AbstractTypeParame
                         Iterator<TypeArgument> iteratorTypeArgument = typeArguments.getTypeArgumentList().iterator();
 
                         while (iteratorTypeParameter.hasNext()) {
-                            bindings.put(iteratorTypeParameter.next().getIdentifier(), iteratorTypeArgument.next());
+                            TypeArgument typeArgument = iteratorTypeArgument.next();
+                            String identifier = iteratorTypeParameter.next().getIdentifier();
+                            bindings.put(identifier, typeArgument);
+                            if (isFixed(typeArgument)) {
+                                fixedNames.add(identifier);
+                            }
                         }
                     } else {
-                        bindings.put(typeParameters.getFirst().getIdentifier(), typeArguments.getTypeArgumentFirst());
+                        TypeArgument typeArgument = typeArguments.getTypeArgumentFirst();
+                        bindings.put(typeParameters.getFirst().getIdentifier(), typeArgument);
+                        if (isFixed(typeArgument)) {
+                            fixedNames.add(typeParameters.getFirst().getIdentifier());
+                        }
                     }
                 }
             }
@@ -230,6 +242,8 @@ public class Java5TypeParametersToTypeArgumentsBinder extends AbstractTypeParame
         }
 
         if (parameterTypes != null) {
+            populateBindingsWithTypeArgumentVisitor.setFixedNames(fixedNames);
+
             if (parameterTypes.isList() && parameters.isList()) {
                 Iterator<Type> parameterTypesIterator = parameterTypes.iterator();
                 Iterator<Expression> parametersIterator = parameters.iterator();
@@ -240,6 +254,8 @@ public class Java5TypeParametersToTypeArgumentsBinder extends AbstractTypeParame
             } else {
                 populateBindingsWithTypeArgument(bindings, typeBounds, parameterTypes.getFirst(), parameters.getFirst());
             }
+
+            populateBindingsWithTypeArgumentVisitor.setFixedNames(Collections.emptySet());
         }
 
         boolean bindingsContainsNull = bindings.containsValue(null);
@@ -272,6 +288,11 @@ public class Java5TypeParametersToTypeArgumentsBinder extends AbstractTypeParame
         }
 
         return bindingsContainsNull;
+    }
+
+    /** @return true for a type argument without wildcard nor type variable ('Map.Entry<K, V>' of 'List<Map.Entry<K, V>>') */
+    protected static boolean isFixed(TypeArgument typeArgument) {
+        return (typeArgument != null) && (typeArgument.isObjectTypeArgument() || typeArgument.isInnerObjectTypeArgument());
     }
 
     protected boolean eraseTypeArguments(Expression expression, BaseTypeParameter typeParameters, BaseTypeArgument typeArguments) {
@@ -362,6 +383,13 @@ public class Java5TypeParametersToTypeArgumentsBinder extends AbstractTypeParame
             if (expression.getTypeAnnotationReferences() == null) {
                 expression.setNonWildcardTypeArguments(null);
             }
+        }
+
+        @Override
+        public void visit(TernaryOperatorExpression expression) {
+            // 'elements instanceof Collection ? Collections2.cast(elements) : newArrayList(elements)'
+            expression.getTrueExpression().accept(this);
+            expression.getFalseExpression().accept(this);
         }
     }
 

@@ -10,8 +10,10 @@ package org.jd.core.v1.service.converter.classfiletojavasyntax.visitor;
 import org.jd.core.v1.model.javasyntax.type.*;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.util.TypeMaker;
 
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Set;
 
 import static org.jd.core.v1.model.javasyntax.type.ObjectType.TYPE_CLASS;
 import static org.jd.core.v1.model.javasyntax.type.ObjectType.TYPE_CLASS_WILDCARD;
@@ -23,6 +25,7 @@ public class PopulateBindingsWithTypeArgumentVisitor implements TypeArgumentVisi
     protected Map<String, TypeArgument> bindings;
     protected Map<String, BaseType> typeBounds;
     protected BaseTypeArgument current;
+    protected Set<String> fixedNames = Collections.emptySet();
 
     public PopulateBindingsWithTypeArgumentVisitor(TypeMaker typeMaker) {
         this.typeMaker = typeMaker;
@@ -34,6 +37,11 @@ public class PopulateBindingsWithTypeArgumentVisitor implements TypeArgumentVisi
         this.bindings = bindings;
         this.typeBounds = typeBounds;
         this.current = typeArgument;
+    }
+
+    /** @param fixedNames the type parameters bound by the type arguments of the receiver: an argument with wildcards does not widen them */
+    public void setFixedNames(Set<String> fixedNames) {
+        this.fixedNames = fixedNames;
     }
 
     @Override
@@ -68,7 +76,7 @@ public class PopulateBindingsWithTypeArgumentVisitor implements TypeArgumentVisi
 
                 if (typeArgument == null) {
                     bindings.put(typeName, checkTypeClassCheckDimensionAndReturnCurrentAsTypeArgument(type));
-                } else if (!current.equals(typeArgument)) {
+                } else if (!current.equals(typeArgument) && !(fixedNames.contains(typeName) && hasWildcardTypeArgument(current))) {
                     typeArgumentToTypeVisitor.init();
                     typeArgument.accept(typeArgumentToTypeVisitor);
                     Type t1 = typeArgumentToTypeVisitor.getType();
@@ -94,6 +102,27 @@ public class PopulateBindingsWithTypeArgumentVisitor implements TypeArgumentVisi
                 }
             }
         }
+    }
+
+    /** 'Map.Entry<? extends K, ? extends V>' */
+    private static boolean hasWildcardTypeArgument(BaseTypeArgument typeArgument) {
+        if (!typeArgument.isObjectTypeArgument() && !typeArgument.isInnerObjectTypeArgument()) {
+            return false;
+        }
+
+        BaseTypeArgument typeArguments = ((ObjectType)typeArgument).getTypeArguments();
+
+        if (typeArguments == null) {
+            return false;
+        }
+
+        for (TypeArgument ta : typeArguments.isTypeArgumentList() ? typeArguments.getTypeArgumentList() : java.util.Collections.singletonList(typeArguments.getTypeArgumentFirst())) {
+            if (ta.isWildcardExtendsTypeArgument() || ta.isWildcardSuperTypeArgument() || (ta == WildcardTypeArgument.WILDCARD_TYPE_ARGUMENT)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static boolean equals(BaseType bt1, BaseType bt2) {
