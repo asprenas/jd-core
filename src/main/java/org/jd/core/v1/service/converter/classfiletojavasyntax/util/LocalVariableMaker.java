@@ -37,6 +37,8 @@ public class LocalVariableMaker {
     protected HashSet<String> blackListNames = new HashSet<>();
     protected Frame currentFrame = new RootFrame();
     protected AbstractLocalVariable[] localVariableCache;
+    /** The other 'LocalVariableTable' ranges of a variable: (index, start offset) -> variable of the first range */
+    protected HashMap<Long, AbstractLocalVariable> otherRanges = new HashMap<>();
 
     protected TypeMaker typeMaker;
     protected Map<String, BaseType> typeBounds;
@@ -236,9 +238,20 @@ public class LocalVariableMaker {
             if (localVariableTable != null) {
                 boolean staticFlag = (method.getAccessFlags() & FLAG_STATIC) != 0;
 
-                for (org.jd.core.v1.model.classfile.attribute.LocalVariable localVariable : localVariableTable.getLocalVariableTable()) {
+                org.jd.core.v1.model.classfile.attribute.LocalVariable[] localVariables = localVariableTable.getLocalVariableTable();
+                HashMap<org.jd.core.v1.model.classfile.attribute.LocalVariable, AbstractLocalVariable> keptLocalVariables = new HashMap<>();
+
+                for (org.jd.core.v1.model.classfile.attribute.LocalVariable localVariable : localVariables) {
                     int index = localVariable.getIndex();
                     int startPc = (!staticFlag && index==0) ? 0 : localVariable.getStartPc();
+
+                    if (isContinuation(code, localVariables, localVariable)) {
+                        // Same variable: an unused entry would be found by a later assignment of another variable of the slot
+                        continue;
+                    }
+
+                    keptLocalVariables.put(localVariable, null);
+
                     String descriptor = localVariable.getDescriptor();
                     String name = localVariable.getName();
                     AbstractLocalVariable lv;
@@ -256,7 +269,26 @@ public class LocalVariableMaker {
                     }
 
                     localVariableSet.add(index, lv);
+                    keptLocalVariables.put(localVariable, lv);
                     names.add(name);
+                }
+
+                // The assignments in the other ranges use the variable of the first range
+                for (org.jd.core.v1.model.classfile.attribute.LocalVariable localVariable : localVariables) {
+                    if (!keptLocalVariables.containsKey(localVariable)) {
+                        org.jd.core.v1.model.classfile.attribute.LocalVariable first = null;
+
+                        for (org.jd.core.v1.model.classfile.attribute.LocalVariable kept : keptLocalVariables.keySet()) {
+                            if ((kept.getIndex() == localVariable.getIndex()) && isSameVariable(kept, localVariable) &&
+                                    (kept.getStartPc() < localVariable.getStartPc()) && ((first == null) || (first.getStartPc() < kept.getStartPc()))) {
+                                first = kept;
+                            }
+                        }
+
+                        if (first != null) {
+                            otherRanges.put(rangeKey(localVariable.getIndex(), localVariable.getStartPc()), keptLocalVariables.get(first));
+                        }
+                    }
                 }
             }
 
@@ -352,6 +384,110 @@ public class LocalVariableMaker {
         }
     }
 
+    /**
+     * javac splits the range of a variable not definitely assigned everywhere ('final int h; try { h = ...; } catch ...'):
+     * the next range of the same variable does not start after an assignment.
+     */
+    protected static boolean isContinuation(
+            AttributeCode attributeCode, org.jd.core.v1.model.classfile.attribute.LocalVariable[] localVariables,
+            org.jd.core.v1.model.classfile.attribute.LocalVariable localVariable) {
+        byte[] code = attributeCode.getCode();
+        int index = localVariable.getIndex();
+        int startPc = localVariable.getStartPc();
+
+        if (isExceptionStore(attributeCode, startPc)) {
+            // A 'catch' variable
+            return false;
+        }
+        boolean earlier = false;
+
+        for (org.jd.core.v1.model.classfile.attribute.LocalVariable lv : localVariables) {
+            if ((lv != localVariable) && (lv.getIndex() == index) && (lv.getStartPc() < startPc) && isSameVariable(lv, localVariable)) {
+                earlier = true;
+                break;
+            }
+        }
+
+        if (!earlier || isStoreAt(code, startPc, index)) {
+            // JDK 1.1 to 1.4: the range of an exception variable starts at the store
+            return false;
+        }
+        if (!isStoreBefore(code, startPc, index)) {
+            return true;
+        }
+
+        // 'final int p; switch (c) { case 0: p = 1; break; default: p = 2; }': a range per assignment, then a range after
+        // the merge point that does not start after an assignment
+        for (org.jd.core.v1.model.classfile.attribute.LocalVariable lv : localVariables) {
+            if ((lv.getIndex() == index) && (lv.getStartPc() > startPc) && isSameVariable(lv, localVariable) &&
+                    !isStoreBefore(code, lv.getStartPc(), index) && !isStoreAt(code, lv.getStartPc(), index)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static boolean isSameVariable(org.jd.core.v1.model.classfile.attribute.LocalVariable lv1, org.jd.core.v1.model.classfile.attribute.LocalVariable lv2) {
+        return lv1.getName().equals(lv2.getName()) && lv1.getDescriptor().equals(lv2.getDescriptor());
+    }
+
+    /** Does the range start at, or just after, the store of the exception at the start of a handler? */
+    private static boolean isExceptionStore(AttributeCode attributeCode, int startPc) {
+        if (attributeCode.getExceptionTable() != null) {
+            for (CodeException codeException : attributeCode.getExceptionTable()) {
+                int handlerPc = codeException.getHandlerPc();
+
+                if ((handlerPc <= startPc) && (startPc <= handlerPc + 4)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /** Is the instruction at 'offset' a store into the variable 'index'? */
+    private static boolean isStoreAt(byte[] code, int offset, int index) {
+        if (offset >= code.length) {
+            return false;
+        }
+
+        int opcode = code[offset] & 255;
+
+        if ((opcode >= 59) && (opcode <= 78)) { // ISTORE_0 ... ASTORE_3
+            return (opcode - 59) % 4 == index;
+        }
+        if ((opcode >= 54) && (opcode <= 58)) { // ISTORE ... ASTORE
+            return (offset + 1 < code.length) && ((code[offset+1] & 255) == index);
+        }
+        if ((opcode == 196) && (offset + 3 < code.length) && ((code[offset+1] & 255) >= 54) && ((code[offset+1] & 255) <= 58)) { // WIDE
+            return (((code[offset+2] & 255) << 8) | (code[offset+3] & 255)) == index;
+        }
+
+        return false;
+    }
+
+    /** Is the instruction before 'offset' a store into the variable 'index' ('ISTORE', 'ISTORE_n', ... 'ASTORE', 'IINC')? */
+    private static boolean isStoreBefore(byte[] code, int offset, int index) {
+        int opcode = code[offset-1] & 255;
+
+        if ((opcode >= 59) && (opcode <= 78) && ((opcode - 59) % 4 == index)) { // ISTORE_0 ... ASTORE_3
+            return true;
+        }
+        if ((offset >= 2) && ((code[offset-2] & 255) >= 54) && ((code[offset-2] & 255) <= 58) && ((code[offset-1] & 255) == index)) { // ISTORE ... ASTORE
+            return true;
+        }
+        if ((offset >= 3) && ((code[offset-3] & 255) == 132) && ((code[offset-2] & 255) == index)) { // IINC
+            return true;
+        }
+        if ((offset >= 4) && ((code[offset-4] & 255) == 196) && ((((code[offset-2] & 255) << 8) | (code[offset-1] & 255)) == index)) { // WIDE
+            return true;
+        }
+
+        return false;
+    }
+
     public AbstractLocalVariable getLocalVariable(int index, int offset) {
         AbstractLocalVariable lv = localVariableCache[index];
 
@@ -376,8 +512,19 @@ public class LocalVariableMaker {
         return lv;
     }
 
+    private static long rangeKey(int index, int offset) {
+        return ((long)index << 32) | offset;
+    }
+
     protected AbstractLocalVariable searchLocalVariable(int index, int offset) {
         AbstractLocalVariable lv = localVariableSet.get(index, offset);
+
+        if (lv == null) {
+            // The range starts after the store instruction, 'offset' is at most 2 bytes after
+            for (int o = offset; (lv == null) && (o >= offset - 2); o--) {
+                lv = otherRanges.get(rangeKey(index, o));
+            }
+        }
 
         if (lv == null) {
             lv = currentFrame.getLocalVariable(index);

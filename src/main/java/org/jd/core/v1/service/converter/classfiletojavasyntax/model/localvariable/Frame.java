@@ -272,10 +272,36 @@ public class Frame {
 
     @SuppressWarnings("unchecked")
     public void updateLocalVariableInForStatements(TypeMaker typeMaker) {
+        HashMap<AbstractLocalVariable, List<ClassFileForStatement>> forStatementsByVariable = new HashMap<>();
+        collectForStatements(new SearchLocalVariableVisitor(), forStatementsByVariable);
+        updateLocalVariableInForStatements(typeMaker, forStatementsByVariable);
+    }
+
+    /** The 'for' statements of all the frames, by variable initialized in 'init' */
+    protected void collectForStatements(SearchLocalVariableVisitor visitor, HashMap<AbstractLocalVariable, List<ClassFileForStatement>> forStatementsByVariable) {
+        for (Statement statement : statements) {
+            if (statement.isForStatement() && (statement.getInit() != null)) {
+                visitor.init();
+                statement.getInit().accept(visitor);
+
+                for (AbstractLocalVariable lv : visitor.getVariables()) {
+                    forStatementsByVariable.computeIfAbsent(lv, k -> new ArrayList<>()).add((ClassFileForStatement)statement);
+                }
+            }
+        }
+
+        if (children != null) {
+            for (Frame child : children) {
+                child.collectForStatements(visitor, forStatementsByVariable);
+            }
+        }
+    }
+
+    protected void updateLocalVariableInForStatements(TypeMaker typeMaker, HashMap<AbstractLocalVariable, List<ClassFileForStatement>> forStatementsByVariable) {
         // Recursive call first
         if (children != null) {
             for (Frame child : children) {
-                child.updateLocalVariableInForStatements(typeMaker);
+                child.updateLocalVariableInForStatements(typeMaker, forStatementsByVariable);
             }
         }
 
@@ -340,6 +366,12 @@ public class Frame {
 
                 // Split local variable range
                 AbstractLocalVariable lv = entry.getKey();
+
+                if ((lv.getFrame() != this) && isReferencedAfter(lv, listFS, forStatementsByVariable.get(lv))) {
+                    // 'int r; try { for (r = 0; ...) ... } catch ... if (r == w)': the variable is used after the loops
+                    continue;
+                }
+
                 Iterator<ClassFileForStatement> iteratorFS = listFS.iterator();
                 ClassFileForStatement firstFS = iteratorFS.next();
 
@@ -359,6 +391,36 @@ public class Frame {
                 }
             }
         }
+    }
+
+    /**
+     * Is the variable referenced after the loops, out of the other loops initializing it? ('int i; for (i = 0; ...) ...;
+     * for (j ...) { for (i = 1; ...) }' is split)
+     */
+    protected static boolean isReferencedAfter(AbstractLocalVariable lv, List<ClassFileForStatement> listFS, List<ClassFileForStatement> allFS) {
+        int toOffset = listFS.get(listFS.size() - 1).getToOffset();
+
+        for (LocalVariableReference lvr : lv.getReferences()) {
+            int offset = ((ClassFileLocalVariableReferenceExpression) lvr).getOffset();
+
+            if ((offset > toOffset) && !isInForStatement(offset, allFS)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static boolean isInForStatement(int offset, List<ClassFileForStatement> listFS) {
+        if (listFS != null) {
+            for (ClassFileForStatement fs : listFS) {
+                if ((fs.getFromOffset() <= offset) && (offset <= fs.getToOffset())) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     protected void createNewLocalVariable(CreateLocalVariableVisitor createLocalVariableVisitor, ClassFileForStatement fs, AbstractLocalVariable lv) {
