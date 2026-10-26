@@ -508,8 +508,15 @@ public class ControlFlowGraphMaker {
                                 while (iterator.hasNext()) {
                                     BasicBlock predecessor = iterator.next();
 
-                                    if (!start.contains(predecessor)) {
+                                    // A jump back to 'start' from after 'endPc' is a loop around the 'try' statement
+                                    if ((predecessor.getType() == TYPE_START) || (predecessor.getFromOffset() < startPc) || (predecessor.getFromOffset() >= endPc)) {
+                                        boolean startIsPredecessor = predecessor.getPredecessors().contains(start);
                                         predecessor.replace(start, tcf);
+                                        if (startIsPredecessor) {
+                                            // 'replace' also changed the predecessors of 'predecessor'
+                                            predecessor.getPredecessors().remove(tcf);
+                                            predecessor.getPredecessors().add(start);
+                                        }
                                         tcfPredecessors.add(predecessor);
                                         iterator.remove();
                                     }

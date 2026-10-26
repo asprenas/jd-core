@@ -619,6 +619,8 @@ public class ControlFlowGraphLoopReducer {
 
                 if (bb == start) {
                     member.setNext(LOOP_START);
+                } else if (bb == END) {
+                    // Inner infinite loop: no 'break'
                 } else if (bb == end) {
                     member.setNext(LOOP_END);
                 } else if (!members.contains(bb) && (bb.getPredecessors().size() > 1)) {
