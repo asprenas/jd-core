@@ -1,5 +1,6 @@
 package org.jd.core.v1.compiler;
 
+import org.jd.core.v1.api.loader.Loader;
 import org.jd.core.v1.loader.DirectoryLoader;
 import org.jd.core.v1.model.message.Message;
 import org.jd.core.v1.printer.PlainTextPrinter;
@@ -58,15 +59,43 @@ public final class InMemorySample {
         }
     }
 
+    /** Zip the class files of the samples: prefix (e.g. "" or "META-INF/versions/11/") -> sample */
+    public static byte[] zip(Map<String, InMemorySample> samples) throws Exception {
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+
+        try (java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(out)) {
+            for (Map.Entry<String, InMemorySample> entry : samples.entrySet()) {
+                java.nio.file.Path root = entry.getValue().directory.toPath();
+                List<java.nio.file.Path> paths = new ArrayList<>();
+
+                try (java.util.stream.Stream<java.nio.file.Path> stream = Files.walk(root)) {
+                    stream.filter(p -> p.toString().endsWith(".class")).forEach(paths::add);
+                }
+
+                for (java.nio.file.Path path : paths) {
+                    zos.putNextEntry(new java.util.zip.ZipEntry(entry.getKey() + root.relativize(path).toString().replace(File.separatorChar, '/')));
+                    zos.write(Files.readAllBytes(path));
+                    zos.closeEntry();
+                }
+            }
+        }
+
+        return out.toByteArray();
+    }
+
     /** The directory of the compiled class files */
     public File getDirectory() {
         return directory;
     }
 
     public String decompile(String internalTypeName, Map<String, Object> configuration) throws Exception {
+        return decompile(new DirectoryLoader(directory), internalTypeName, configuration);
+    }
+
+    public static String decompile(Loader loader, String internalTypeName, Map<String, Object> configuration) throws Exception {
         PlainTextPrinter printer = new PlainTextPrinter();
         Message message = new Message();
-        message.setHeader("loader", new DirectoryLoader(directory));
+        message.setHeader("loader", loader);
         message.setHeader("printer", printer);
         message.setHeader("mainInternalTypeName", internalTypeName);
         message.setHeader("configuration", configuration);
