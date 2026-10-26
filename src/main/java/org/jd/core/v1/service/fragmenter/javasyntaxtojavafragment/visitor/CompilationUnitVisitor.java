@@ -954,6 +954,15 @@ public class CompilationUnitVisitor extends StatementVisitor {
 
         tokens = new Tokens();
 
+        // '@Deprecated module m'
+        BaseAnnotationReference annotationReferences = declaration.getAnnotationReferences();
+        if (annotationReferences != null) {
+            annotationReferences.accept(annotationVisitor);
+            fragments.addTokensFragment(tokens);
+            JavaFragmentFactory.addSpacerAfterMemberAnnotations(fragments);
+            tokens = new Tokens();
+        }
+
         if ((declaration.getFlags() & FLAG_OPEN) != 0) {
             tokens.add(OPEN);
             tokens.add(TextToken.SPACE);
@@ -1039,7 +1048,7 @@ public class CompilationUnitVisitor extends StatementVisitor {
     protected void visitModuleDeclaration(ModuleDeclaration.ModuleInfo moduleInfo) {
         tokens.add(REQUIRES);
 
-        if ((moduleInfo.getFlags() & FLAG_STATIC) != 0) {
+        if ((moduleInfo.getFlags() & FLAG_STATIC_PHASE) != 0) {
             tokens.add(TextToken.SPACE);
             tokens.add(STATIC);
         }
