@@ -182,13 +182,23 @@ public class ControlFlowGraphLoopReducer {
 
                         if (commonMemberIndexes.equals(onlyLoopHeaderIndex)) {
                             // Only 'start' is the common basic block -> Split loop
+                            // The inner loop is the side that does not exit: 'do { while (c0) a; b; } while (c1);' with
+                            // 'next' = 'a', or 'do { while (!c0) a; b; } while (c1);' with 'branch' = 'a'
+                            BitSet innerIndexes = nextIndexes;
+                            BitSet outerIndexes = branchIndexes;
+
+                            if (containsExit(list, nextIndexes, memberIndexes, start) && !containsExit(list, branchIndexes, memberIndexes, start)) {
+                                innerIndexes = branchIndexes;
+                                outerIndexes = nextIndexes;
+                            }
+
                             loops.add(makeLoop(list, start, searchZoneIndexes, memberIndexes));
 
-                            branchIndexes.flip(0, length);
-                            searchZoneIndexes.and(branchIndexes);
+                            outerIndexes.flip(0, length);
+                            searchZoneIndexes.and(outerIndexes);
                             searchZoneIndexes.set(start.getIndex());
 
-                            loops.add(makeLoop(list, start, searchZoneIndexes, nextIndexes));
+                            loops.add(makeLoop(list, start, searchZoneIndexes, innerIndexes));
                         } else {
                             loops.add(makeLoop(list, start, searchZoneIndexes, memberIndexes));
                         }
@@ -204,6 +214,23 @@ public class ControlFlowGraphLoopReducer {
         loops.sort(LOOP_COMPARATOR);
 
         return loops;
+    }
+
+    /** @return true if a block of 'sideIndexes', except 'start', jumps out of the loop */
+    protected static boolean containsExit(List<BasicBlock> list, BitSet sideIndexes, BitSet memberIndexes, BasicBlock start) {
+        for (int i = sideIndexes.nextSetBit(0); i >= 0; i = sideIndexes.nextSetBit(i + 1)) {
+            BasicBlock bb = list.get(i);
+
+            if ((bb != start) && (isExit(bb.getNext(), memberIndexes) || isExit(bb.getBranch(), memberIndexes))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static boolean isExit(BasicBlock successor, BitSet memberIndexes) {
+        return (successor.getIndex() >= 0) && !memberIndexes.get(successor.getIndex());
     }
 
     protected static BitSet searchLoopMemberIndexes(int length, BitSet memberIndexes, BasicBlock current, BasicBlock start) {

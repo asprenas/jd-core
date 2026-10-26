@@ -786,9 +786,10 @@ public class StatementMaker {
 
             if (ifBB.getNext() == LOOP_END) {
                 // 'while' or 'for' loop
-                makeStatements(watchdog, ifBB.getCondition(), statements, jumps);
-                statements.add(LoopStatementMaker.makeLoop(
-                    majorVersion, typeBounds, localVariableMaker, basicBlock, statements, stack.pop(),
+                Statements conditionStatements = new Statements();
+                makeStatements(watchdog, ifBB.getCondition(), conditionStatements, jumps);
+                statements.add(makeConditionalLoop(
+                    basicBlock, statements, conditionStatements, stack.pop(),
                     makeSubStatements(watchdog, ifBB.getSub1(), statements, jumps, updateBasicBlock), jumps));
                 makeStatements(watchdog, basicBlock.getNext(), statements, jumps);
                 return;
@@ -807,9 +808,10 @@ public class StatementMaker {
                 } else {
                     // 'while' or 'for' loop
                     ifBB.getCondition().inverseCondition();
-                    makeStatements(watchdog, ifBB.getCondition(), statements, jumps);
-                    statements.add(LoopStatementMaker.makeLoop(
-                        majorVersion, typeBounds, localVariableMaker, basicBlock, statements, stack.pop(),
+                    Statements conditionStatements = new Statements();
+                    makeStatements(watchdog, ifBB.getCondition(), conditionStatements, jumps);
+                    statements.add(makeConditionalLoop(
+                        basicBlock, statements, conditionStatements, stack.pop(),
                         makeSubStatements(watchdog, ifBB.getNext(), statements, jumps, updateBasicBlock), jumps));
                 }
 
@@ -854,6 +856,28 @@ public class StatementMaker {
         }
 
         makeStatements(watchdog, basicBlock.getNext(), statements, jumps);
+    }
+
+    /**
+     * The statements of the condition block run before each test: 'while (true) { i++; if (i > 16) break; ... }', not
+     * 'i++; while (i <= 16) { ... }'.
+     */
+    protected Statement makeConditionalLoop(
+            BasicBlock basicBlock, Statements statements, Statements conditionStatements, Expression condition,
+            Statements subStatements, Statements jumps) {
+        if (conditionStatements.isEmpty()) {
+            return LoopStatementMaker.makeLoop(
+                majorVersion, typeBounds, localVariableMaker, basicBlock, statements, condition, subStatements, jumps);
+        }
+
+        Statements loopStatements = new Statements();
+
+        replacePreOperatorWithPostOperator(conditionStatements);
+        loopStatements.addAll(conditionStatements);
+        loopStatements.add(new IfStatement(SwitchStatementMaker.negate(condition), BreakStatement.BREAK));
+        loopStatements.addAll(subStatements);
+
+        return LoopStatementMaker.makeLoop(localVariableMaker, basicBlock, statements, loopStatements, jumps);
     }
 
     protected int countStartLoop(BasicBlock bb) {
