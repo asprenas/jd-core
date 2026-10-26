@@ -256,7 +256,9 @@ public class AddCastExpressionVisitor extends AbstractJavaSyntaxVisitor {
             boolean forceCast = !unique && (typeMaker.matchCount(typeBounds, expression.getInternalTypeName(), expression.getName(), parameters, false) > 1);
             BaseTypeParameter mtp = methodTypeParameters;
             methodTypeParameters = ((ClassFileMethodInvocationExpression)expression).getTypeParameters();
-            expression.setParameters(updateParameters(((ClassFileMethodInvocationExpression)expression).getParameterTypes(), parameters, forceCast, unique));
+            // The parameter types of the descriptor of a generic method: the bound type parameters may select another overload
+            BaseType erasedTypes = (methodTypeParameters == null) ? null : typeMaker.makeMethodTypes(expression.getDescriptor()).parameterTypes;
+            expression.setParameters(updateParameters(((ClassFileMethodInvocationExpression)expression).getParameterTypes(), erasedTypes, parameters, forceCast, unique));
             methodTypeParameters = mtp;
         }
         
@@ -335,23 +337,45 @@ public class AddCastExpressionVisitor extends AbstractJavaSyntaxVisitor {
 
     @SuppressWarnings("unchecked")
     protected BaseExpression updateParameters(BaseType types, BaseExpression expressions, boolean forceCast, boolean unique) {
+        return updateParameters(types, null, expressions, forceCast, unique);
+    }
+
+    protected BaseExpression updateParameters(BaseType types, BaseType erasedTypes, BaseExpression expressions, boolean forceCast, boolean unique) {
         if (expressions != null) {
             if (expressions.isList()) {
                 DefaultList<Type> typeList = types.getList();
                 DefaultList<Expression> expressionList = expressions.getList();
 
                 for (int i = expressionList.size() - 1; i >= 0; i--) {
-                    expressionList.set(i, updateParameter(typeList.get(i), expressionList.get(i), forceCast, unique));
+                    expressionList.set(i, updateParameter(typeList.get(i), erasedType(erasedTypes, i), expressionList.get(i), forceCast, unique));
                 }
             } else {
-                expressions = updateParameter(types.getFirst(), expressions.getFirst(), forceCast, unique);
+                expressions = updateParameter(types.getFirst(), erasedType(erasedTypes, 0), expressions.getFirst(), forceCast, unique);
             }
         }
 
         return expressions;
     }
 
-    private Expression updateParameter(Type type, Expression expression, boolean forceCast, boolean unique) {
+    private static Type erasedType(BaseType erasedTypes, int index) {
+        if ((erasedTypes == null) || (index >= erasedTypes.size())) {
+            return null;
+        }
+        return erasedTypes.isList() ? erasedTypes.getList().get(index) : erasedTypes.getFirst();
+    }
+
+    private Expression updateParameter(Type type, Type erasedType, Expression expression, boolean forceCast, boolean unique) {
+        if (!unique && (erasedType != null) && erasedType.isObjectType() && type.isObjectType() && isWrapperType((ObjectType)type) &&
+                !erasedType.equals(type) && isBoxing(expression)) {
+            // 'use((Object)1)' with 'use(Integer)' and '<T> use(T)': the type parameter bound to 'Integer' would select
+            // 'use(Integer)', the erasure of the parameter keeps the generic method
+            Expression parameter = expression.getParameters().getFirst();
+            parameter.accept(this);
+            searchFirstLineNumberVisitor.init();
+            expression.accept(searchFirstLineNumberVisitor);
+            return new CastExpression(searchFirstLineNumberVisitor.getLineNumber(), erasedType, parameter);
+        }
+
         expression = updateExpression(type, expression, forceCast, unique);
 
         if (type == TYPE_BYTE) {
