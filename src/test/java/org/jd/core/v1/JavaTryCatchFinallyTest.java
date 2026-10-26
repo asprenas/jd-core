@@ -123,7 +123,7 @@ public class JavaTryCatchFinallyTest {
 
         assertTrue(source.matches(PatternMaker.make(": 166 */", "return System.currentTimeMillis();")));
 
-        // TODO assertTrue(source.matches(PatternMaker.make("/* 217:", "inCatch1();")));
+        assertTrue(source.matches(PatternMaker.make("/* 217:", "inCatch1();")));
 
         assertTrue(source.indexOf("/* 888: 888 */") != -1);
 

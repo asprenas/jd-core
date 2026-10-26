@@ -886,7 +886,12 @@ public class ControlFlowGraphReducer {
                         offset = Integer.MAX_VALUE;
                     }
 
-                    BasicBlock last = updateBlock(bb, end, offset);
+                    BasicBlock last = (exceptionHandler.getInternalThrowableName() != null) ?
+                        includeFinallyCopy(bb, end, offset) : null;
+
+                    if (last == null) {
+                        last = updateBlock(bb, end, offset);
+                    }
 
                     if (toOffset < last.getToOffset()) {
                         toOffset = last.getToOffset();
@@ -1091,6 +1096,50 @@ public class ControlFlowGraphReducer {
         }
 
         return basicBlock;
+    }
+
+    /**
+     * Eclipse 3.2 'finally' pattern: the copy of the 'finally' statements of a 'catch' clause follows the copy of the
+     * 'try' clause, past the end of the handlers ('catch { inCatch(); goto copy2 } ... copy1: inFinally(); goto after;
+     * copy2: inFinally(); after:'). The copy ends the 'catch' clause, as the other Eclipse patterns: the 'finally'
+     * statements are removed later from the end of each clause.
+     *
+     * @return the block before the copy, last block of the clause before the copy (the copy, past the 'try' statement,
+     *         does not extend it), or null if the pattern is not found
+     */
+    protected static BasicBlock includeFinallyCopy(BasicBlock basicBlock, BasicBlock end, int maxOffset) {
+        if (end.matchType(GROUP_END)) {
+            return null;
+        }
+
+        WatchDog watchdog = new WatchDog();
+
+        while (basicBlock.matchType(GROUP_SINGLE_SUCCESSOR)) {
+            watchdog.check(basicBlock, basicBlock.getNext());
+            BasicBlock next = basicBlock.getNext();
+
+            if (next == end) {
+                return null;
+            }
+            if (next.getFromOffset() > maxOffset) {
+                if ((next.getType() == TYPE_STATEMENTS) && (next.getPredecessors().size() == 1) && (next.getFromOffset() > end.getFromOffset())) {
+                    if (next.getNext() == end.getNext()) {
+                        next.getNext().getPredecessors().remove(next);
+                        next.setNext(END);
+                        return basicBlock;
+                    }
+                    if (next.getNext() == END) {
+                        // Already included by the reduction of the inner 'try-catch' statement
+                        return basicBlock;
+                    }
+                }
+                return null;
+            }
+
+            basicBlock = next;
+        }
+
+        return null;
     }
 
     protected static void removeJsrAndMergeSubTry(BasicBlock basicBlock) {
