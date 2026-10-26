@@ -701,6 +701,20 @@ public class Java5TypeParametersToTypeArgumentsBinder extends AbstractTypeParame
         expression.getTrueExpression().accept(this);
         type = t;
         expression.getFalseExpression().accept(this);
+
+        if (t.isGenericType() && !isInScope((GenericType)t)) {
+            // 'range.has() ? range.lower() : null': the type of a bound branch, not 'C' of 'lower()'
+            Expression e = expression.getTrueExpression().isNullExpression() ? expression.getFalseExpression() : expression.getTrueExpression();
+
+            if (e.getType().isGenericType() && isInScope((GenericType)e.getType())) {
+                expression.setType(e.getType());
+            }
+        }
+    }
+
+    @Override
+    public boolean isInScope(GenericType type) {
+        return contextualBindings.containsKey(type.getName());
     }
 
     @Override
