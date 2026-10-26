@@ -929,6 +929,11 @@ public class ControlFlowGraphReducer {
     }
 
     protected static boolean checkEclipseFinallyPattern(BasicBlock basicBlock, BasicBlock finallyBB, int maxOffset) {
+        if (basicBlock.getNext() == END) {
+            // The 'try' block does not complete normally: no 'finally' statements after it
+            return false;
+        }
+
         int nextOpcode = ByteCodeUtil.searchNextOpcode(basicBlock, maxOffset);
 
         if ((nextOpcode == 0)   ||
