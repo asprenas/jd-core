@@ -29,6 +29,11 @@ public abstract class AbstractTypeParametersToTypeArgumentsBinder {
 
     public abstract void bindParameterTypesWithArgumentTypes(Type type, Expression expression);
 
+    /** @return false for a type variable of another declaration ('C' of 'Range<C>' in 'from(Range<T> range)') */
+    public boolean isInScope(GenericType type) {
+        return true;
+    }
+
     public void updateNewExpression(ClassFileNewExpression ne, String descriptor, TypeMaker.MethodTypes methodTypes, BaseExpression parameters) {
         ne.set(descriptor, clone(methodTypes.parameterTypes), parameters);
     }

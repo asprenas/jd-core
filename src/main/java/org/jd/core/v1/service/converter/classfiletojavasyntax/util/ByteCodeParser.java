@@ -29,6 +29,7 @@ import org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.e
 import org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.statement.ClassFileMonitorEnterStatement;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.model.javasyntax.statement.ClassFileMonitorExitStatement;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.model.localvariable.AbstractLocalVariable;
+import org.jd.core.v1.service.converter.classfiletojavasyntax.model.localvariable.GenericLocalVariable;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.visitor.CreateInstructionsVisitor;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.visitor.EraseTypeArgumentVisitor;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.visitor.RenameLocalVariablesVisitor;
@@ -378,24 +379,28 @@ public class ByteCodeParser {
                     indexRef = stack.pop();
                     arrayRef = stack.pop();
                     type1 = arrayRef.getType();
+                    typeParametersToTypeArgumentsBinder.bindParameterTypesWithArgumentTypes(TYPE_OBJECT, valueRef);
                     statements.add(new ExpressionStatement(new BinaryOperatorExpression(lineNumber, type1.createType(type1.getDimension()-1), new ArrayExpression(lineNumber, arrayRef, indexRef), "=", valueRef, 16)));
                     break;
                 case 80: // LASTORE
                     valueRef = stack.pop();
                     indexRef = stack.pop();
                     arrayRef = stack.pop();
+                    typeParametersToTypeArgumentsBinder.bindParameterTypesWithArgumentTypes(TYPE_OBJECT, valueRef);
                     statements.add(new ExpressionStatement(new BinaryOperatorExpression(lineNumber, TYPE_LONG, new ArrayExpression(lineNumber, arrayRef, indexRef), "=", valueRef, 16)));
                     break;
                 case 81: // FASTORE
                     valueRef = stack.pop();
                     indexRef = stack.pop();
                     arrayRef = stack.pop();
+                    typeParametersToTypeArgumentsBinder.bindParameterTypesWithArgumentTypes(TYPE_OBJECT, valueRef);
                     statements.add(new ExpressionStatement(new BinaryOperatorExpression(lineNumber, TYPE_FLOAT, new ArrayExpression(lineNumber, arrayRef, indexRef), "=", valueRef, 16)));
                     break;
                 case 82: // DASTORE
                     valueRef = stack.pop();
                     indexRef = stack.pop();
                     arrayRef = stack.pop();
+                    typeParametersToTypeArgumentsBinder.bindParameterTypesWithArgumentTypes(TYPE_OBJECT, valueRef);
                     statements.add(new ExpressionStatement(new BinaryOperatorExpression(lineNumber, TYPE_DOUBLE, new ArrayExpression(lineNumber, arrayRef, indexRef), "=", valueRef, 16)));
                     break;
                 case 83: // AASTORE
@@ -411,18 +416,21 @@ public class ByteCodeParser {
                     valueRef = stack.pop();
                     indexRef = stack.pop();
                     arrayRef = stack.pop();
+                    typeParametersToTypeArgumentsBinder.bindParameterTypesWithArgumentTypes(TYPE_OBJECT, valueRef);
                     statements.add(new ExpressionStatement(new BinaryOperatorExpression(lineNumber, TYPE_BYTE, new ArrayExpression(lineNumber, arrayRef, indexRef), "=", valueRef, 16)));
                     break;
                 case 85: // CASTORE
                     valueRef = stack.pop();
                     indexRef = stack.pop();
                     arrayRef = stack.pop();
+                    typeParametersToTypeArgumentsBinder.bindParameterTypesWithArgumentTypes(TYPE_OBJECT, valueRef);
                     statements.add(new ExpressionStatement(new BinaryOperatorExpression(lineNumber, TYPE_CHAR, new ArrayExpression(lineNumber, arrayRef, indexRef), "=", valueRef, 16)));
                     break;
                 case 86: // SASTORE
                     valueRef = stack.pop();
                     indexRef = stack.pop();
                     arrayRef = stack.pop();
+                    typeParametersToTypeArgumentsBinder.bindParameterTypesWithArgumentTypes(TYPE_OBJECT, valueRef);
                     statements.add(new ExpressionStatement(new BinaryOperatorExpression(lineNumber, TYPE_SHORT, new ArrayExpression(lineNumber, arrayRef, indexRef), "=", valueRef, 16)));
                     break;
                 case 87: case 88: // POP, POP2
@@ -1985,6 +1993,13 @@ public class ByteCodeParser {
         Type type = localVariable.getType();
         // A new synthetic variable ('return' value stored before 'finally'): the type arguments come from the arguments
         typeParametersToTypeArgumentsBinder.bindParameterTypesWithArgumentTypes((type == TYPE_UNDEFINED_OBJECT) ? TYPE_OBJECT : type, valueRef);
+        if ((localVariable instanceof GenericLocalVariable) && valueRef.getType().isGenericType() &&
+                !typeParametersToTypeArgumentsBinder.isInScope((GenericType)localVariable.getType()) &&
+                typeParametersToTypeArgumentsBinder.isInScope((GenericType)valueRef.getType())) {
+            // A local variable typed with a type variable of another declaration, before the binding
+            ((GenericLocalVariable)localVariable).setType((GenericType)valueRef.getType());
+        }
+
         localVariable.typeOnRight(typeBounds, valueRef.getType());
 
         ClassFileLocalVariableReferenceExpression vre = new ClassFileLocalVariableReferenceExpression(lineNumber, offset, localVariable);
