@@ -33,6 +33,8 @@ public class AddCastExpressionVisitor extends AbstractJavaSyntaxVisitor {
 
     protected TypeMaker typeMaker;
     protected Map<String, BaseType> typeBounds;
+    /** The type parameters of the invoked generic method whose arguments are updated */
+    protected BaseTypeParameter methodTypeParameters;
     protected Type returnedType;
     protected BaseType exceptionTypes;
     protected Type type;
@@ -252,7 +254,10 @@ public class AddCastExpressionVisitor extends AbstractJavaSyntaxVisitor {
         if ((parameters != null) && (parameters.size() > 0)) {
             boolean unique = typeMaker.matchCount(expression.getInternalTypeName(), expression.getName(), parameters.size(), false) <= 1;
             boolean forceCast = !unique && (typeMaker.matchCount(typeBounds, expression.getInternalTypeName(), expression.getName(), parameters, false) > 1);
+            BaseTypeParameter mtp = methodTypeParameters;
+            methodTypeParameters = ((ClassFileMethodInvocationExpression)expression).getTypeParameters();
             expression.setParameters(updateParameters(((ClassFileMethodInvocationExpression)expression).getParameterTypes(), parameters, forceCast, unique));
+            methodTypeParameters = mtp;
         }
         
         expression.getExpression().accept(this);
@@ -415,7 +420,11 @@ public class AddCastExpressionVisitor extends AbstractJavaSyntaxVisitor {
                         } else if (isRawTypeAssignableGenericMethodInvocation(objectType, expressionObjectType, expression)) {
                             // 'collect(Collectors.toList())': the type arguments of a generic method are inferred from
                             // the parameter type (target typing), a raw cast would hide them
-                        } else if (!ObjectType.TYPE_OBJECT.equals(type) && !typeMaker.isAssignable(typeBounds, objectType, expressionObjectType)) {
+                        } else if (unique && containsMethodTypeParameter(objectType) && typeMaker.isRawTypeAssignable(objectType, expressionObjectType)) {
+                            // 'get(Iterable<T> iterable, ...)' with 'Iterable<? extends T>': 'T' of the invoked method is
+                            // inferred from the argument, a raw cast would infer 'Object'
+                        } else if (!ObjectType.TYPE_OBJECT.equals(type) && !typeMaker.isAssignable(typeBounds, objectType, expressionObjectType) &&
+                                   !isWildcardAssignable(objectType, expressionObjectType)) {
                             BaseTypeArgument ta1 = objectType.getTypeArguments();
                             BaseTypeArgument ta2 = expressionObjectType.getTypeArguments();
                             Type t = type;
@@ -472,6 +481,81 @@ public class AddCastExpressionVisitor extends AbstractJavaSyntaxVisitor {
 
         return (bound != null) && !bound.isList() && bound.isObjectType() && (((Type)bound).getDimension() == genericType.getDimension()) &&
                typeMaker.isRawTypeAssignable(type, (ObjectType)bound);
+    }
+
+    /** @return true if a type argument of 'type' is a type parameter of the invoked generic method */
+    private boolean containsMethodTypeParameter(ObjectType type) {
+        if ((methodTypeParameters == null) || (type.getTypeArguments() == null)) {
+            return false;
+        }
+
+        java.util.HashSet<String> names = new java.util.HashSet<>();
+
+        for (TypeParameter typeParameter : methodTypeParameters.isList() ? (TypeParameters)methodTypeParameters : java.util.Collections.singletonList((TypeParameter)methodTypeParameters.getFirst())) {
+            names.add(typeParameter.getIdentifier());
+        }
+
+        for (TypeArgument typeArgument : typeArgumentList(type.getTypeArguments())) {
+            if (typeArgument.isWildcardExtendsTypeArgument() || typeArgument.isWildcardSuperTypeArgument()) {
+                typeArgument = typeArgument.getType();
+            }
+            if (typeArgument.isGenericTypeArgument() && names.contains(((GenericType)typeArgument).getName())) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** @return true for 'Supplier<? extends InputStream>' and 'Supplier<FileInputStream>' */
+    private boolean isWildcardAssignable(ObjectType type, ObjectType expressionType) {
+        BaseTypeArgument typeArguments = type.getTypeArguments();
+
+        if ((typeArguments == null) || (expressionType.getDimension() != type.getDimension())) {
+            return false;
+        }
+
+        ObjectType ot = typeMaker.searchSuperParameterizedType(type, expressionType);
+
+        if ((ot == null) || !ot.getInternalName().equals(type.getInternalName()) || (ot.getTypeArguments() == null)) {
+            return false;
+        }
+
+        java.util.List<TypeArgument> list1 = typeArgumentList(typeArguments);
+        java.util.List<TypeArgument> list2 = typeArgumentList(ot.getTypeArguments());
+
+        if (list1.size() != list2.size()) {
+            return false;
+        }
+
+        boolean wildcard = false;
+
+        for (int i = 0; i < list1.size(); i++) {
+            TypeArgument ta1 = list1.get(i);
+            TypeArgument ta2 = list2.get(i);
+
+            if (ta1.equals(ta2) || (ta1 == WildcardTypeArgument.WILDCARD_TYPE_ARGUMENT)) {
+                continue;
+            }
+            if (!ta1.isWildcardExtendsTypeArgument()) {
+                return false;
+            }
+
+            Type bound = ta1.getType();
+            Type t2 = ta2.isWildcardExtendsTypeArgument() ? ta2.getType() : (ta2 instanceof Type) ? (Type)ta2 : null;
+
+            if ((t2 == null) || !bound.isObjectType() || !t2.isObjectType() || !typeMaker.isAssignable(typeBounds, (ObjectType)bound, (ObjectType)t2)) {
+                return false;
+            }
+
+            wildcard = true;
+        }
+
+        return wildcard;
+    }
+
+    private static java.util.List<TypeArgument> typeArgumentList(BaseTypeArgument typeArguments) {
+        return typeArguments.isTypeArgumentList() ? typeArguments.getTypeArgumentList() : java.util.Collections.singletonList(typeArguments.getTypeArgumentFirst());
     }
 
     private static boolean isWrapperType(ObjectType type) {
