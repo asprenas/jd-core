@@ -18,6 +18,7 @@ public class ClassFileMethodInvocationExpression extends MethodInvocationExpress
     protected BaseTypeParameter typeParameters;
     protected BaseType parameterTypes;
     protected boolean bound = false;
+    protected boolean rawCast = false;
 
     public ClassFileMethodInvocationExpression(
             int lineNumber, BaseTypeParameter typeParameters, Type type, Expression expression,
@@ -50,5 +51,14 @@ public class ClassFileMethodInvocationExpression extends MethodInvocationExpress
 
     public void setBound(boolean bound) {
         this.bound = bound;
+    }
+
+    /** @return true if the type arguments must not be inferred from the target type ('(Comparator)Ordering.natural()') */
+    public boolean isRawCast() {
+        return rawCast;
+    }
+
+    public void setRawCast(boolean rawCast) {
+        this.rawCast = rawCast;
     }
 }
