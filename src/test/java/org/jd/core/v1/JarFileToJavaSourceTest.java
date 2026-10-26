@@ -53,10 +53,7 @@ public class JarFileToJavaSourceTest {
     @Test
     public void testCommonsImaging() throws Exception {
         // Decompile and recompile 'org.apache.commons:commons-imaging:1.0-alpha1'
-        // TODO Recompilation failures: control flow ('continue' outside of loop), assignment to a new array element
-        test(org.apache.commons.imaging.Imaging.class,
-            "org/apache/commons/imaging/common/mylzw/MyLzwDecompressor.class",
-            "org/apache/commons/imaging/formats/jpeg/segments/DhtSegment.class");
+        test(org.apache.commons.imaging.Imaging.class);
     }
 
     @Test

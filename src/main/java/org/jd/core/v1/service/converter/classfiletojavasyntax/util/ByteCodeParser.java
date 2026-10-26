@@ -407,6 +407,11 @@ public class ByteCodeParser {
                     valueRef = stack.pop();
                     indexRef = stack.pop();
                     arrayRef = stack.pop();
+                    if (valueRef.isNewArray() && !arrayRef.isNewArray()) {
+                        // 'table[i] = new byte[] { (byte)i };'. In an array initializer ('new int[][] { { 1 } }'), the
+                        // element is made with the array
+                        valueRef = NewArrayMaker.make(statements, valueRef);
+                    }
                     type1 = arrayRef.getType();
                     type2 = type1.createType(type1.getDimension()>0 ? type1.getDimension()-1 : 0);
                     typeParametersToTypeArgumentsBinder.bindParameterTypesWithArgumentTypes(type2, valueRef);
