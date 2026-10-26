@@ -58,6 +58,11 @@ public final class InMemorySample {
         }
     }
 
+    /** The directory of the compiled class files */
+    public File getDirectory() {
+        return directory;
+    }
+
     public String decompile(String internalTypeName, Map<String, Object> configuration) throws Exception {
         PlainTextPrinter printer = new PlainTextPrinter();
         Message message = new Message();

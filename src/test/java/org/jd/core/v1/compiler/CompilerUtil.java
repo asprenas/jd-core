@@ -29,6 +29,14 @@ public class CompilerUtil {
         // The versions older than the oldest release of the running javac ('1.5' -> 8 on JDK 25) are raised.
         // -Xlint:-options hides 'source value 8 is obsolete and will be removed in a future release' (JDK 21+)
         int release = Math.max(parseJavaVersion(preferredJavaVersion), oldestRelease(compiler));
+
+        for (JavaFileObject javaFileObject : javaFileObjects) {
+            if (javaFileObject.getName().endsWith("module-info.java")) {
+                // A module declaration needs '--release 9' or more
+                release = Math.max(release, 9);
+            }
+        }
+
         List<String> options = Arrays.asList("--release", String.valueOf(release), "-Xlint:-options", "-d", DESTINATION_DIRECTORY_PATH, "-cp", System.getProperty("java.class.path"));
         List<JavaFileObject> compilationUnits = Arrays.asList(javaFileObjects);
 
@@ -61,6 +69,11 @@ public class CompilerUtil {
         }
 
         return compilationSuccess;
+    }
+
+    /** The directory of the class files of the last compilation */
+    public static File getDestinationDirectory() {
+        return DESTINATION_DIRECTORY;
     }
 
     private static int oldestRelease = -1;

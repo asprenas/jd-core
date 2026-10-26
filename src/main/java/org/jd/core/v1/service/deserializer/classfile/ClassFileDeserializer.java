@@ -319,10 +319,14 @@ public class ClassFileDeserializer {
                         attributes.put(name, new AttributeMethodParameters(loadParameters(reader, constants)));
                         break;
                     case "Module":
+                        String moduleName = constants.getConstantTypeName(reader.readUnsignedShort());
+                        int moduleFlags = reader.readUnsignedShort();
+                        int moduleVersionIndex = reader.readUnsignedShort();
                         attributes.put(name, new AttributeModule(
-                                constants.getConstantTypeName(reader.readUnsignedShort()),
-                                reader.readUnsignedShort(),
-                                constants.getConstantUtf8(reader.readUnsignedShort()),
+                                moduleName,
+                                moduleFlags,
+                                // 0: no version ('javac --module-version' not used)
+                                (moduleVersionIndex == 0) ? null : constants.getConstantUtf8(moduleVersionIndex),
                                 loadModuleInfos(reader, constants),
                                 loadPackageInfos(reader, constants),
                                 loadPackageInfos(reader, constants),

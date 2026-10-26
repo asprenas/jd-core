@@ -7,6 +7,8 @@
 
 package org.jd.core.v1.model.javasyntax.declaration;
 
+import org.jd.core.v1.model.javasyntax.reference.BaseAnnotationReference;
+
 import java.util.List;
 
 public class ModuleDeclaration extends TypeDeclaration {
@@ -18,7 +20,11 @@ public class ModuleDeclaration extends TypeDeclaration {
     protected List<ServiceInfo> provides;
 
     public ModuleDeclaration(int flags, String internalName, String name, String version, List<ModuleInfo> requires, List<PackageInfo> exports, List<PackageInfo> opens, List<String> uses, List<ServiceInfo> provides) {
-        super(null, flags, internalName, name, null);
+        this(null, flags, internalName, name, version, requires, exports, opens, uses, provides);
+    }
+
+    public ModuleDeclaration(BaseAnnotationReference annotationReferences, int flags, String internalName, String name, String version, List<ModuleInfo> requires, List<PackageInfo> exports, List<PackageInfo> opens, List<String> uses, List<ServiceInfo> provides) {
+        super(annotationReferences, flags, internalName, name, null);
         this.version = version;
         this.requires = requires;
         this.exports = exports;
