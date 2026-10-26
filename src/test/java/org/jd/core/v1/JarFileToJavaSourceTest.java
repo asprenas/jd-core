@@ -22,6 +22,7 @@ import org.jd.core.v1.service.writer.WriteTokenProcessor;
 import org.jd.core.v1.util.DefaultList;
 import org.junit.jupiter.api.Test;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
 import java.nio.file.Paths;
@@ -93,8 +94,8 @@ public class JarFileToJavaSourceTest {
     @Test
     public void testJUnit5() throws Exception {
         // Decompile and recompile 'org.junit.jupiter:junit-jupiter-api:5.14.4'
-        // Out of scope: 'module-info.class' (recompiled with -source 8), Kotlin class 'AssertionsKt'
-        test(org.junit.jupiter.api.Test.class, "module-info.class", "org/junit/jupiter/api/AssertionsKt.class");
+        // Out of scope: Kotlin class 'AssertionsKt'
+        test(org.junit.jupiter.api.Test.class, "org/junit/jupiter/api/AssertionsKt.class");
     }
 
     @Test
@@ -128,8 +129,12 @@ public class JarFileToJavaSourceTest {
 //        test(com.google.common.collect.Collections2.class);
 //    }
 
+    /** The jar of the decompiled classes: the package classes of 'module-info' */
+    protected File jarFile;
+
     protected void test(Class clazz, String... excludedPaths) throws Exception {
-        test(new FileInputStream(Paths.get(clazz.getProtectionDomain().getCodeSource().getLocation().toURI()).toFile()), excludedPaths);
+        jarFile = Paths.get(clazz.getProtectionDomain().getCodeSource().getLocation().toURI()).toFile();
+        test(new FileInputStream(jarFile), excludedPaths);
     }
 
     protected void test(InputStream inputStream, String... excludedPaths) throws Exception {
@@ -189,7 +194,11 @@ public class JarFileToJavaSourceTest {
                     // Recompile source
                     String source = printer.toString();
 
-                    if (!CompilerUtil.compile("1.8", new JavaSourceFileObject(internalTypeName, source))) {
+                    boolean compiled = (internalTypeName.equals("module-info") && (jarFile != null)) ?
+                        CompilerUtil.compileModuleInfo("9", source, jarFile) :
+                        CompilerUtil.compile("1.8", new JavaSourceFileObject(internalTypeName, source));
+
+                    if (!compiled) {
                         recompilationFailedCounter++;
                     }
                 }
