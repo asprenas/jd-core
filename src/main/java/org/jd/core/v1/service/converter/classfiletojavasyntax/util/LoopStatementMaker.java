@@ -484,6 +484,26 @@ public class LoopStatementMaker {
         return new ClassFileForEachStatement(item, array, subStatements);
     }
 
+    /** @return true if a receiver of the method invocations is typed with wildcards ('Multimap<? extends K, ? extends V>') */
+    protected static boolean isInvocationOnWildcardType(Expression expression) {
+        while (expression.isMethodInvocationExpression()) {
+            expression = expression.getExpression();
+            Type type = expression.getType();
+
+            if (type.isObjectType() && (((ObjectType)type).getTypeArguments() != null)) {
+                BaseTypeArgument typeArguments = ((ObjectType)type).getTypeArguments();
+
+                for (TypeArgument typeArgument : typeArguments.isTypeArgumentList() ? typeArguments.getTypeArgumentList() : java.util.Collections.singletonList(typeArguments.getTypeArgumentFirst())) {
+                    if (typeArgument.isWildcardExtendsTypeArgument() || typeArgument.isWildcardSuperTypeArgument() || (typeArgument == WildcardTypeArgument.WILDCARD_TYPE_ARGUMENT)) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
     protected static Statement makeForEachList(
             Map<String, BaseType> typeBounds, LocalVariableMaker localVariableMaker, Statements statements,
             Expression condition, Statements subStatements) {
@@ -596,6 +616,10 @@ public class LoopStatementMaker {
                     if (list.isNewExpression()) {
                         ClassFileNewExpression ne = (ClassFileNewExpression)list;
                         ne.setType(listType.createType(DiamondTypeArgument.DIAMOND));
+                    } else if (isInvocationOnWildcardType(list)) {
+                        // 'multimap.asMap().entrySet()' with 'Multimap<? extends K, ? extends V> multimap': the type
+                        // arguments are captures, only a cast from the raw type is allowed
+                        list = new CastExpression(TYPE_ITERABLE.createType(item.getType()), new CastExpression(TYPE_ITERABLE, list));
                     } else {
                         list = new CastExpression(TYPE_ITERABLE.createType(item.getType()), list);
                     }
