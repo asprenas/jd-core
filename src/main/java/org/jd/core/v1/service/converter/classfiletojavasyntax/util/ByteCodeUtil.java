@@ -116,6 +116,84 @@ public class ByteCodeUtil {
         }
     }
 
+    /**
+     * Is the reference local variable 'index' read in the code following 'offset' (in the order of the code, until the
+     * end or a store into the variable)? Used without the local variable table: the variable may be used after a loop.
+     */
+    public static boolean isReferenceLoadedAfter(byte[] code, int offset, int index) {
+        while (offset < code.length) {
+            int opcode = code[offset] & 255;
+            int variableIndex = -1;
+            boolean load = false;
+
+            if ((opcode >= 42) && (opcode <= 45)) { // ALOAD_0 ... ALOAD_3
+                variableIndex = opcode - 42;
+                load = true;
+            } else if ((opcode >= 75) && (opcode <= 78)) { // ASTORE_0 ... ASTORE_3
+                variableIndex = opcode - 75;
+            } else if ((opcode == 25) || (opcode == 58)) { // ALOAD, ASTORE
+                variableIndex = code[offset+1] & 255;
+                load = (opcode == 25);
+            } else if ((opcode == 196) && (((code[offset+1] & 255) == 25) || ((code[offset+1] & 255) == 58))) { // WIDE
+                variableIndex = ((code[offset+2] & 255) << 8) | (code[offset+3] & 255);
+                load = ((code[offset+1] & 255) == 25);
+            }
+
+            if (variableIndex == index) {
+                return load;
+            }
+
+            offset = nextOffset(code, offset);
+        }
+
+        return false;
+    }
+
+    /** The offset of the instruction following the one at 'offset' */
+    protected static int nextOffset(byte[] code, int offset) {
+        int opcode = code[offset] & 255;
+
+        switch (opcode) {
+            case 16: case 18: // BIPUSH, LDC
+            case 21: case 22: case 23: case 24: case 25: // ILOAD, LLOAD, FLOAD, DLOAD, ALOAD
+            case 54: case 55: case 56: case 57: case 58: // ISTORE, LSTORE, FSTORE, DSTORE, ASTORE
+            case 169: // RET
+            case 188: // NEWARRAY
+                return offset + 2;
+            case 17: // SIPUSH
+            case 19: case 20: // LDC_W, LDC2_W
+            case 132: // IINC
+            case 153: case 154: case 155: case 156: case 157: case 158: // IFEQ ... IFLE
+            case 159: case 160: case 161: case 162: case 163: case 164: case 165: case 166: // IF_ICMPEQ ... IF_ACMPNE
+            case 167: case 168: // GOTO, JSR
+            case 178: case 179: case 180: case 181: // GETSTATIC, PUTSTATIC, GETFIELD, PUTFIELD
+            case 182: case 183: case 184: // INVOKEVIRTUAL, INVOKESPECIAL, INVOKESTATIC
+            case 187: case 189: case 192: case 193: // NEW, ANEWARRAY, CHECKCAST, INSTANCEOF
+            case 198: case 199: // IFNULL, IFNONNULL
+                return offset + 3;
+            case 197: // MULTIANEWARRAY
+                return offset + 4;
+            case 185: case 186: // INVOKEINTERFACE, INVOKEDYNAMIC
+            case 200: case 201: // GOTO_W, JSR_W
+                return offset + 5;
+            case 170: { // TABLESWITCH
+                int o = ((offset + 4) & 0xFFFC) + 4; // Skip padding and default offset
+                int low = ((code[o] & 255) << 24) | ((code[o+1] & 255) << 16) | ((code[o+2] & 255) << 8) | (code[o+3] & 255);
+                int high = ((code[o+4] & 255) << 24) | ((code[o+5] & 255) << 16) | ((code[o+6] & 255) << 8) | (code[o+7] & 255);
+                return o + 8 + (4 * (high - low + 1));
+            }
+            case 171: { // LOOKUPSWITCH
+                int o = ((offset + 4) & 0xFFFC) + 4; // Skip padding and default offset
+                int count = ((code[o] & 255) << 24) | ((code[o+1] & 255) << 16) | ((code[o+2] & 255) << 8) | (code[o+3] & 255);
+                return o + 4 + (8 * count);
+            }
+            case 196: // WIDE
+                return offset + (((code[offset+1] & 255) == 132) ? 6 : 4); // IINC
+            default:
+                return offset + 1;
+        }
+    }
+
     public static int getLastOpcode(BasicBlock basicBlock) {
         byte[] code = basicBlock.getControlFlowGraph().getMethod().<AttributeCode>getAttribute("Code").getCode();
         int offset = basicBlock.getFromOffset();

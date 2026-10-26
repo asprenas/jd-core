@@ -315,9 +315,12 @@ public class JavaLoopTest {
         assertTrue(source.matches(PatternMaker.make("for (int j : new int[] { 4 })")));
         assertTrue(source.matches(PatternMaker.make("for (String str : paramArrayOfString)")));
         assertTrue(source.matches(PatternMaker.make("for (String str : paramList)")));
+        // The iterator used after the loop ('notAForEach'): not a for-each
+        assertTrue(source.matches(PatternMaker.make("while (iterator.hasNext())")));
+        assertTrue(source.matches(PatternMaker.make("System.out.println(iterator);")));
 
         // Recompile decompiled source code and check errors
-        //assertTrue(CompilerUtil.compile("1.7", new JavaSourceFileObject(internalClassName, source)));
+        assertTrue(CompilerUtil.compile("1.7", new JavaSourceFileObject(internalClassName, source)));
     }
 
     @Test
