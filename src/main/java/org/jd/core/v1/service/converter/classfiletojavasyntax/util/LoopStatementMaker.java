@@ -7,6 +7,7 @@
 
 package org.jd.core.v1.service.converter.classfiletojavasyntax.util;
 
+import org.jd.core.v1.model.classfile.attribute.AttributeCode;
 import org.jd.core.v1.model.javasyntax.expression.*;
 import org.jd.core.v1.model.javasyntax.statement.*;
 import org.jd.core.v1.model.javasyntax.type.*;
@@ -62,7 +63,7 @@ public class LoopStatementMaker {
                 return statement;
             }
 
-            statement = makeForEachList(typeBounds, localVariableMaker, statements, condition, subStatements);
+            statement = makeForEachList(typeBounds, localVariableMaker, loopBasicBlock, statements, condition, subStatements);
 
             if (statement != null) {
                 return statement;
@@ -505,8 +506,8 @@ public class LoopStatementMaker {
     }
 
     protected static Statement makeForEachList(
-            Map<String, BaseType> typeBounds, LocalVariableMaker localVariableMaker, Statements statements,
-            Expression condition, Statements subStatements) {
+            Map<String, BaseType> typeBounds, LocalVariableMaker localVariableMaker, BasicBlock loopBasicBlock,
+            Statements statements, Expression condition, Statements subStatements) {
         if (condition == null) {
             return null;
         }
@@ -591,6 +592,14 @@ public class LoopStatementMaker {
         }
 
         if (visitor1.containsReference()) {
+            return null;
+        }
+
+        // Check if 'i$' is not used after the loop: without the local variable table, the references following the loop
+        // are not made yet
+        byte[] code = loopBasicBlock.getControlFlowGraph().getMethod().<AttributeCode>getAttribute("Code").getCode();
+
+        if (ByteCodeUtil.isReferenceLoadedAfter(code, loopBasicBlock.getToOffset(), syntheticIterator.getIndex())) {
             return null;
         }
 
