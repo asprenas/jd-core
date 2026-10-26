@@ -156,6 +156,23 @@ public class ControlFlowGraphReducer {
                     }
                 }
             }
+
+            if ((branch.getPredecessors().size() > 1) && endsWithReturn(branch)) {
+                // 'branch' is a sequence ending with a 'return', also reached from other blocks (labeled 'break')
+                // Un-optimize byte code
+                BasicBlock branchClone = cloneSequence(branch);
+                BasicBlock branchLast = branchClone;
+
+                while (!branchLast.matchType(GROUP_END)) {
+                    branchLast = branchLast.getNext();
+                }
+
+                branch.getPredecessors().remove(basicBlock);
+                branchClone.getPredecessors().add(basicBlock);
+                basicBlock.setBranch(branchClone);
+                createIfElse(TYPE_IF_ELSE, basicBlock, next, nextLast, branchClone, branchLast, nextNext);
+                return true;
+            }
         }
 
         if (branch.matchType(GROUP_SINGLE_SUCCESSOR|TYPE_RETURN|TYPE_RETURN_VALUE|TYPE_THROW) && (branch.getPredecessors().size() == 1)) {
@@ -192,7 +209,26 @@ public class ControlFlowGraphReducer {
             return true;
         }
 
+        if (branch.matchType(TYPE_RETURN|TYPE_RETURN_VALUE|TYPE_THROW) && (next.getPredecessors().size() > 1)) {
+            // 'next' is also reached from other blocks (labeled 'break'): keep it after the 'if'
+            // Un-optimize byte code
+            branch = cloneBranch(basicBlock, branch);
+            basicBlock.inverseCondition();
+            // Create 'if'
+            createIf(basicBlock, branch, branch, next);
+            return true;
+        }
+
         if (next.matchType(GROUP_SINGLE_SUCCESSOR)) {
+            if ((next.getPredecessors().size() > 1) && endsWithReturn(next)) {
+                // 'next' is also reached from other blocks (labeled 'break')
+                // Un-optimize byte code
+                next.getPredecessors().remove(basicBlock);
+                next = cloneSequence(next);
+                next.getPredecessors().add(basicBlock);
+                basicBlock.setNext(next);
+            }
+
             BasicBlock nextLast = next;
             BasicBlock nextNext = next.getNext();
 
@@ -1560,6 +1596,54 @@ public class ControlFlowGraphReducer {
         clone.getPredecessors().add(bb);
         next.getPredecessors().remove(bb);
         bb.setNext(clone);
+        return clone;
+    }
+
+    /** @return true if 'basicBlock' is a sequence of statements and ternary operators ending with a 'return' or a 'throw' */
+    protected static boolean endsWithReturn(BasicBlock basicBlock) {
+        while (basicBlock.matchType(TYPE_STATEMENTS|TYPE_TERNARY_OPERATOR)) {
+            if (basicBlock.matchType(TYPE_TERNARY_OPERATOR) && !(isExpression(basicBlock.getSub1()) && isExpression(basicBlock.getSub2()))) {
+                return false;
+            }
+            basicBlock = basicBlock.getNext();
+        }
+
+        return basicBlock.matchType(TYPE_RETURN|TYPE_RETURN_VALUE|TYPE_THROW) && (basicBlock != RETURN);
+    }
+
+    protected static boolean isExpression(BasicBlock basicBlock) {
+        return basicBlock.matchType(TYPE_STATEMENTS|TYPE_GOTO_IN_TERNARY_OPERATOR) && (basicBlock.getNext() == END);
+    }
+
+    /** Copy of a sequence accepted by 'endsWithReturn' */
+    protected static BasicBlock cloneSequence(BasicBlock basicBlock) {
+        if ((basicBlock == END) || (basicBlock == RETURN)) {
+            return basicBlock;
+        }
+
+        BasicBlock clone = basicBlock.getControlFlowGraph().newBasicBlock(basicBlock);
+
+        if (basicBlock.matchType(TYPE_TERNARY_OPERATOR)) {
+            clone.setCondition(basicBlock.getControlFlowGraph().newBasicBlock(basicBlock.getCondition()));
+            clone.setSub1(cloneSequence(basicBlock.getSub1()));
+            clone.setSub2(cloneSequence(basicBlock.getSub2()));
+        }
+
+        if (!basicBlock.matchType(GROUP_END) && (basicBlock.getNext() != END)) {
+            BasicBlock next = cloneSequence(basicBlock.getNext());
+            next.getPredecessors().add(clone);
+            clone.setNext(next);
+        }
+
+        return clone;
+    }
+
+    protected static BasicBlock cloneBranch(BasicBlock bb, BasicBlock branch) {
+        BasicBlock clone = branch.getControlFlowGraph().newBasicBlock(branch.getType(), branch.getFromOffset(), branch.getToOffset());
+        clone.setNext(END);
+        clone.getPredecessors().add(bb);
+        branch.getPredecessors().remove(bb);
+        bb.setBranch(clone);
         return clone;
     }
 }

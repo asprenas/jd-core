@@ -78,12 +78,11 @@ public class JarFileToJavaSourceTest {
         test(com.squareup.javawriter.JavaWriter.class);
     }
 
-    // TODO In progress
-//    @Test
-//    public void testJodaTime() throws Exception {
-//        // Decompile and recompile 'joda-time:joda-time:2.10.5'
-//        test(org.joda.time.DateTime.class);
-//    }
+    @Test
+    public void testJodaTime() throws Exception {
+        // Decompile and recompile 'joda-time:joda-time:2.10.5'
+        test(org.joda.time.DateTime.class);
+    }
 
     @Test
     public void testJSoup() throws Exception {
