@@ -380,6 +380,15 @@ public class AddCastExpressionVisitor extends AbstractJavaSyntaxVisitor {
         } else {
             Type expressionType = expression.getType();
 
+            if (type.isObjectType() && (((ObjectType)type).getTypeArguments() != null) && expression.isMethodInvocationExpression() &&
+                    ((ClassFileMethodInvocationExpression)expression).isRawCast()) {
+                // '(Comparator)Ordering.natural()': a raw cast stops the inference of the type arguments from the target type
+                expression.accept(this);
+                searchFirstLineNumberVisitor.init();
+                expression.accept(searchFirstLineNumberVisitor);
+                return new CastExpression(searchFirstLineNumberVisitor.getLineNumber(), ((ObjectType)type).createType(null), expression);
+            }
+
             if (!unique && type.isObjectType() && !isWrapperType((ObjectType)type) && isBoxing(expression)) {
                 // 'eq((Short)expected, actual)' with 'eq(short, short)' and 'eq(Object, Object)': AutoboxingVisitor
                 // removes 'Short.valueOf(expected)', the cast keeps the boxing that selects the overload
@@ -417,7 +426,7 @@ public class AddCastExpressionVisitor extends AbstractJavaSyntaxVisitor {
                             }
                             expression = addCastExpression(t, expression);
                         }
-                    } else if (expressionType.isGenericType() && !ObjectType.TYPE_OBJECT.equals(type)) {
+                    } else if (expressionType.isGenericType() && !ObjectType.TYPE_OBJECT.equals(type) && !isBoundAssignable((ObjectType)type, expressionType)) {
                         expression = addCastExpression(type, expression);
                     }
                 } else if (type.isGenericType()) {
@@ -449,6 +458,20 @@ public class AddCastExpressionVisitor extends AbstractJavaSyntaxVisitor {
         }
 
         return expression;
+    }
+
+    /** @return true if the bound of the type variable 'C extends Comparable' fits 'Comparable' or 'Comparable&lt;?&gt;' */
+    private boolean isBoundAssignable(ObjectType type, Type genericType) {
+        BaseTypeArgument typeArguments = type.getTypeArguments();
+
+        if ((typeArguments != null) && (typeArguments != WildcardTypeArgument.WILDCARD_TYPE_ARGUMENT)) {
+            return false;
+        }
+
+        BaseType bound = (typeBounds == null) ? null : typeBounds.get(genericType.getName());
+
+        return (bound != null) && !bound.isList() && bound.isObjectType() && (((Type)bound).getDimension() == genericType.getDimension()) &&
+               typeMaker.isRawTypeAssignable(type, (ObjectType)bound);
     }
 
     private static boolean isWrapperType(ObjectType type) {

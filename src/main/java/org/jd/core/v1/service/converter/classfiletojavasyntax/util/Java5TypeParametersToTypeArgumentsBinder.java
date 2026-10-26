@@ -450,6 +450,12 @@ public class Java5TypeParametersToTypeArgumentsBinder extends AbstractTypeParame
                     mie.setParameterTypes(parameterTypes = bind(bindings, parameterTypes));
                     mie.setType((Type) bind(bindings, mie.getType()));
 
+                    if ((methodTypeParameters != null) && (parameters == null) && !partialBinding && isTypeBoundViolated(methodTypeParameters, bindings)) {
+                        // '<C extends Comparable> Ordering<C> natural()' with the target type 'Ordering<E>': 'E' is not
+                        // a 'Comparable', 'C' must not be inferred from the target type
+                        mie.setRawCast(true);
+                    }
+
                     if ((methodTypeParameters != null) && !partialBinding) {
                         bindTypeParametersToNonWildcardTypeArgumentsVisitor.init(bindings);
                         methodTypeParameters.accept(bindTypeParametersToNonWildcardTypeArgumentsVisitor);
@@ -518,6 +524,33 @@ public class Java5TypeParametersToTypeArgumentsBinder extends AbstractTypeParame
 
             mie.setBound(true);
         }
+    }
+
+    /** @return true if a type parameter is bound to a type variable whose bound does not satisfy the type parameter bound */
+    protected boolean isTypeBoundViolated(BaseTypeParameter typeParameters, Map<String, TypeArgument> bindings) {
+        for (TypeParameter typeParameter : (typeParameters.isList() ? (TypeParameters)typeParameters : java.util.Collections.singletonList((TypeParameter)typeParameters.getFirst()))) {
+            if (!(typeParameter instanceof TypeParameterWithTypeBounds)) {
+                continue;
+            }
+
+            BaseType typeBounds = ((TypeParameterWithTypeBounds)typeParameter).getTypeBounds();
+            TypeArgument typeArgument = bindings.get(typeParameter.getIdentifier());
+
+            if (typeBounds.isList() || !typeBounds.isObjectType() || !(typeArgument instanceof GenericType)) {
+                continue;
+            }
+
+            GenericType genericType = (GenericType)typeArgument;
+            BaseType genericTypeBounds = contextualTypeBounds.get(genericType.getName());
+            ObjectType bound = (ObjectType)typeBounds;
+
+            if ((genericType.getDimension() == 0) && ((genericTypeBounds == null) || genericTypeBounds.isList() || !genericTypeBounds.isObjectType() ||
+                    !typeMaker.isRawTypeAssignable(bound, (ObjectType)genericTypeBounds))) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** @return true if each type parameter of the generic method is in the type of a parameter */
