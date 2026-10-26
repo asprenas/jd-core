@@ -587,6 +587,14 @@ public class Java5TypeParametersToTypeArgumentsBinder extends AbstractTypeParame
             return false;
         }
 
+        for (Expression parameter : mie.getParameters()) {
+            if (parameter instanceof LambdaIdentifiersExpression) {
+                // 'Comparator.<MethodDescriptor, String>comparing(descriptor -> ...).thenComparing(...)': the type of
+                // the parameter of an implicitly typed lambda is not inferred from its body
+                return false;
+            }
+        }
+
         TypeMaker.MethodTypes methodTypes = typeMaker.makeMethodTypes(mie.getInternalTypeName(), mie.getName(), mie.getDescriptor());
 
         if ((methodTypes == null) || (methodTypes.parameterTypes == null)) {

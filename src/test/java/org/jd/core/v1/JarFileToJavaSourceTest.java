@@ -90,19 +90,12 @@ public class JarFileToJavaSourceTest {
         test(org.jsoup.Jsoup.class);
     }
 
-    // TODO Disabled after migrating tests to JUnit 5. To be replaced by a JUnit 5 jar test
-    //      (test(org.junit.jupiter.api.Test.class) + 'org.apiguardian:apiguardian-api' and
-    //      'org.jspecify:jspecify' on the test classpath), which currently fails: 2/160 classes
-    //      do not recompile (junit-jupiter-api 5.14.4).
-    //      Decompiler issues to fix:
-    //      1. Generic type lost (MethodOrderer, AssertionUtils)
-    //         ex: lambda parameter typed 'Object': 'descriptor.getMethod()' does not compile
-    //      Out of scope: 'module-info.class' (recompiled with -source 8), Kotlin class 'AssertionsKt'
-//    @Test
-//    public void testJUnit4() throws Exception {
-//        // Decompile and recompile 'junit:junit:4.12'
-//        test(org.junit.Test.class);
-//    }
+    @Test
+    public void testJUnit5() throws Exception {
+        // Decompile and recompile 'org.junit.jupiter:junit-jupiter-api:5.14.4'
+        // Out of scope: 'module-info.class' (recompiled with -source 8), Kotlin class 'AssertionsKt'
+        test(org.junit.jupiter.api.Test.class, "module-info.class", "org/junit/jupiter/api/AssertionsKt.class");
+    }
 
     @Test
     public void testMimecraft() throws Exception {
@@ -135,11 +128,12 @@ public class JarFileToJavaSourceTest {
 //        test(com.google.common.collect.Collections2.class);
 //    }
 
-    protected void test(Class clazz) throws Exception {
-        test(new FileInputStream(Paths.get(clazz.getProtectionDomain().getCodeSource().getLocation().toURI()).toFile()));
+    protected void test(Class clazz, String... excludedPaths) throws Exception {
+        test(new FileInputStream(Paths.get(clazz.getProtectionDomain().getCodeSource().getLocation().toURI()).toFile()), excludedPaths);
     }
 
-    protected void test(InputStream inputStream) throws Exception {
+    protected void test(InputStream inputStream, String... excludedPaths) throws Exception {
+        List<String> excluded = Arrays.asList(excludedPaths);
         long fileCounter = 0;
         long exceptionCounter = 0;
         long assertFailedCounter = 0;
@@ -161,7 +155,7 @@ public class JarFileToJavaSourceTest {
             long time0 = System.currentTimeMillis();
 
             for (String path : loader.getMap().keySet()) {
-                if (path.endsWith(".class") && (path.indexOf('$') == -1)) {
+                if (path.endsWith(".class") && (path.indexOf('$') == -1) && !excluded.contains(path)) {
                     String internalTypeName = path.substring(0, path.length() - 6); // 6 = ".class".length()
 
                     // TODO DEBUG if (!internalTypeName.endsWith("/Debug")) continue;

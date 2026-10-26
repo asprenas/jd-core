@@ -420,6 +420,8 @@ public class AddCastExpressionVisitor extends AbstractJavaSyntaxVisitor {
                         } else if (isRawTypeAssignableGenericMethodInvocation(objectType, expressionObjectType, expression)) {
                             // 'collect(Collectors.toList())': the type arguments of a generic method are inferred from
                             // the parameter type (target typing), a raw cast would hide them
+                        } else if (((expression instanceof MethodReferenceExpression) && !expression.isMethodInvocationExpression()) || (expression instanceof AbstractLambdaExpression)) {
+                            // 'map(Object::toString)': a functional expression takes the target type
                         } else if (unique && containsMethodTypeParameter(objectType) && typeMaker.isRawTypeAssignable(objectType, expressionObjectType)) {
                             // 'get(Iterable<T> iterable, ...)' with 'Iterable<? extends T>': 'T' of the invoked method is
                             // inferred from the argument, a raw cast would infer 'Object'
@@ -535,6 +537,17 @@ public class AddCastExpressionVisitor extends AbstractJavaSyntaxVisitor {
             TypeArgument ta2 = list2.get(i);
 
             if (ta1.equals(ta2) || (ta1 == WildcardTypeArgument.WILDCARD_TYPE_ARGUMENT)) {
+                continue;
+            }
+            if (ta1.isWildcardSuperTypeArgument()) {
+                // 'Function<? super Integer, ...>' and 'Function<Integer, ...>'
+                Type bound = ta1.getType();
+
+                if (!(ta2 instanceof Type) || !bound.isObjectType() || !((Type)ta2).isObjectType() || !typeMaker.isAssignable(typeBounds, (ObjectType)ta2, (ObjectType)bound)) {
+                    return false;
+                }
+
+                wildcard = true;
                 continue;
             }
             if (!ta1.isWildcardExtendsTypeArgument()) {
