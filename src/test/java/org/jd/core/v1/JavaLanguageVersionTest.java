@@ -77,7 +77,7 @@ public class JavaLanguageVersionTest {
                 ZipLoader loader = loader(resource);
 
                 for (String entry : new TreeSet<>(loader.getMap().keySet())) {
-                    if (entry.endsWith(".class") && entry.indexOf('$') == -1 && !entry.equals("module-info.class")) {
+                    if (entry.endsWith(".class") && entry.indexOf('$') == -1) {
                         String internalName = entry.substring(0, entry.length() - ".class".length());
                         String displayName = internalName.substring(internalName.lastIndexOf('/') + 1) + variant;
                         samples.add(Arguments.of(version, resource, internalName, displayName));

@@ -10,21 +10,20 @@ package org.jd.core.v1.compiler;
 import javax.tools.*;
 import java.io.File;
 import java.io.StringWriter;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class CompilerUtil {
     protected static final File DESTINATION_DIRECTORY = new File("build/test-recompiled");
     protected static final String DESTINATION_DIRECTORY_PATH = DESTINATION_DIRECTORY.getAbsolutePath();
 
     public static boolean compile(String preferredJavaVersion, JavaFileObject... javaFileObjects) throws Exception {
-        boolean compilationSuccess = false;
-
         DESTINATION_DIRECTORY.mkdirs();
 
         JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
-        StringWriter writer = new StringWriter();
-        DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<>();
         // Compile against the matching platform API, not the running JDK's (e.g. JDK 21 SequencedCollection).
         // The versions older than the oldest release of the running javac ('1.5' -> 8 on JDK 25) are raised.
         // -Xlint:-options hides 'source value 8 is obsolete and will be removed in a future release' (JDK 21+)
@@ -38,7 +37,53 @@ public class CompilerUtil {
         }
 
         List<String> options = Arrays.asList("--release", String.valueOf(release), "-Xlint:-options", "-d", DESTINATION_DIRECTORY_PATH, "-cp", System.getProperty("java.class.path"));
-        List<JavaFileObject> compilationUnits = Arrays.asList(javaFileObjects);
+
+        return compile(compiler, options, Arrays.asList(javaFileObjects));
+    }
+
+    protected static final Pattern MODULE_NAME = Pattern.compile("module\\s+([\\w.]+)\\s*\\{");
+
+    /**
+     * Compile a decompiled 'module-info.java' alone: the packages of the module come from its original classes
+     * ('--patch-module'), the required modules from the jars of the class path ('--module-path').
+     *
+     * @param moduleContent the jar or the directory of the original classes of the module
+     */
+    public static boolean compileModuleInfo(String preferredJavaVersion, String source, File moduleContent) throws Exception {
+        Matcher matcher = MODULE_NAME.matcher(source);
+
+        if (!matcher.find()) {
+            return false;
+        }
+
+        JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+        int release = Math.max(9, Math.max(parseJavaVersion(preferredJavaVersion), oldestRelease(compiler)));
+        StringBuilder modulePath = new StringBuilder();
+
+        for (String entry : System.getProperty("java.class.path").split(File.pathSeparator)) {
+            // Only the jars: a directory without 'module-info.class' is not a module
+            if (entry.endsWith(".jar") && !new File(entry).getAbsoluteFile().equals(moduleContent.getAbsoluteFile())) {
+                if (modulePath.length() > 0) {
+                    modulePath.append(File.pathSeparatorChar);
+                }
+                modulePath.append(entry);
+            }
+        }
+
+        File destination = new File(DESTINATION_DIRECTORY, "module");
+        destination.mkdirs();
+
+        List<String> options = new ArrayList<>(Arrays.asList(
+            "--release", String.valueOf(release), "-Xlint:-options", "-d", destination.getAbsolutePath(),
+            "--module-path", modulePath.toString(), "--patch-module", matcher.group(1) + '=' + moduleContent.getAbsolutePath()));
+
+        return compile(compiler, options, Arrays.<JavaFileObject>asList(new JavaSourceFileObject("module-info", source)));
+    }
+
+    protected static boolean compile(JavaCompiler compiler, List<String> options, List<JavaFileObject> compilationUnits) throws Exception {
+        boolean compilationSuccess = false;
+        StringWriter writer = new StringWriter();
+        DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<>();
 
         try (StandardJavaFileManager fileManager = compiler.getStandardFileManager(diagnostics, null, null)) {
             compilationSuccess = compiler.getTask(writer, fileManager, diagnostics, options, null, compilationUnits).call();
