@@ -10,6 +10,7 @@ package org.jd.core.v1;
 import static org.junit.jupiter.api.Assertions.*;
 import org.jd.core.v1.compiler.CompilerUtil;
 import org.jd.core.v1.compiler.JavaSourceFileObject;
+import org.jd.core.v1.api.loader.MultiReleaseLoader;
 import org.jd.core.v1.loader.ZipLoader;
 import org.jd.core.v1.model.message.Message;
 import org.jd.core.v1.printer.PlainTextPrinter;
@@ -145,7 +146,10 @@ public class JarFileToJavaSourceTest {
         long recompilationFailedCounter = 0;
 
         try (InputStream is = inputStream) {
-            ZipLoader loader = new ZipLoader(is);
+            ZipLoader zipLoader = new ZipLoader(is);
+            // The versioned classes of a multi-release jar are not decompiled directly: the root classes are read
+            // for Java 8, the version of the recompilation
+            MultiReleaseLoader loader = new MultiReleaseLoader(zipLoader, 8);
             CounterPrinter printer = new CounterPrinter();
             HashMap<String, Integer> statistics = new HashMap<>();
             HashMap<String, Object> configuration = new HashMap<>();
@@ -159,8 +163,8 @@ public class JarFileToJavaSourceTest {
 
             long time0 = System.currentTimeMillis();
 
-            for (String path : loader.getMap().keySet()) {
-                if (path.endsWith(".class") && (path.indexOf('$') == -1) && !excluded.contains(path)) {
+            for (String path : zipLoader.getMap().keySet()) {
+                if (path.endsWith(".class") && (path.indexOf('$') == -1) && !path.startsWith("META-INF/versions/") && !excluded.contains(path)) {
                     String internalTypeName = path.substring(0, path.length() - 6); // 6 = ".class".length()
 
                     // TODO DEBUG if (!internalTypeName.endsWith("/Debug")) continue;

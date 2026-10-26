@@ -126,5 +126,22 @@ decompiler.decompile(loader, printer, "path/to/YourClass");
 String source = printer.toString();
 ```
 
+## Multi-release jar
+
+For a multi-release jar (JEP 238), wrap the loader of the jar entries in a
+_[MultiReleaseLoader](https://github.com/asprenas/jd-core/blob/master/src/main/java/org/jd/core/v1/api/loader/MultiReleaseLoader.java)_:
+each class is read from the highest `META-INF/versions/k/` directory with `k` lower than or equal to the target
+version, or from the root, as the JVM does. Checking the manifest is the responsibility of the caller:
+```java
+JarFile jarFile = new JarFile(file);
+Loader loader = ...; // reads the entries of 'jarFile', names relative to the root of the jar
+
+if (jarFile.isMultiRelease()) { // Java 9+, or 'Multi-Release: true' in the manifest
+    loader = new MultiReleaseLoader(loader, 17); // decompile the classes run by Java 17
+}
+
+decompiler.decompile(loader, printer, "path/to/YourClass");
+```
+
 ## License
 Released under the [GNU GPL v3](LICENSE).
