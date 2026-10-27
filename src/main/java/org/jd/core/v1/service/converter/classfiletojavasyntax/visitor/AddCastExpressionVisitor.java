@@ -553,6 +553,11 @@ public class AddCastExpressionVisitor extends AbstractJavaSyntaxVisitor {
 
     /** @return true if the bound of the type variable 'C extends Comparable' fits 'Comparable' or 'Comparable&lt;?&gt;' */
     private boolean isBoundAssignable(ObjectType type, Type genericType) {
+        if (ObjectType.TYPE_OBJECT.getInternalName().equals(type.getInternalName()) && (type.getDimension() <= genericType.getDimension())) {
+            // 'max(a, b, c, rest)' with 'E... rest' and 'Object[]': an array of type variables is an 'Object[]'
+            return true;
+        }
+
         BaseTypeArgument typeArguments = type.getTypeArguments();
 
         if ((typeArguments != null) && (typeArguments != WildcardTypeArgument.WILDCARD_TYPE_ARGUMENT)) {
