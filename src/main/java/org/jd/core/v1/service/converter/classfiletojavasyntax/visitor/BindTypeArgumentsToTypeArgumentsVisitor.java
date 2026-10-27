@@ -171,7 +171,9 @@ public class BindTypeArgumentsToTypeArgumentsVisitor extends AbstractTypeArgumen
         if (ta == null) {
             result = null;
         } else if (ta instanceof Type) {
-            result = ((Type)ta).createType(type.getDimension());
+            // 'ByteProcessor<T>' with 'T' bound to 'byte[]': the dimension of the bound type is kept
+            Type t = (Type)ta;
+            result = t.createType(t.getDimension() + type.getDimension());
         } else {
             result = ta;
         }
