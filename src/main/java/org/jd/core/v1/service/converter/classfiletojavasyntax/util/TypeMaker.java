@@ -127,6 +127,7 @@ public class TypeMaker {
 
             if (! "java/lang/Object".equals(superTypeName)) {
                 typeTypes.superType = makeFromInternalTypeName(superTypeName);
+                typeTypes.superType = makeInheritedOuterTypeArguments(classFile, typeTypes.superType);
             }
 
             if (interfaceTypeNames != null) {
@@ -174,6 +175,63 @@ public class TypeMaker {
         internalTypeNameToTypeTypes.put(internalTypeName, typeTypes);
 
         return typeTypes;
+    }
+
+    /**
+     * 'class EntrySet extends AbstractMultiset&lt;E&gt;.EntrySet' without 'Signature' attribute (old javac): the outer type
+     * of the non-static inner super type takes the type arguments of the super type of an enclosing class. A raw super
+     * type would erase the inherited methods ('name clash').
+     */
+    private ObjectType makeInheritedOuterTypeArguments(ClassFile classFile, ObjectType superType) {
+        if (!(superType instanceof InnerObjectType) || (superType.getTypeArguments() != null) || !isNonStaticInnerClass(classFile, superType.getInternalName())) {
+            return superType;
+        }
+
+        InnerObjectType innerSuperType = (InnerObjectType)superType;
+        ObjectType outerType = innerSuperType.getOuterType();
+
+        if ((outerType == null) || (outerType.getTypeArguments() != null)) {
+            return superType;
+        }
+
+        String outerInternalTypeName = outerType.getInternalName();
+
+        for (ClassFile enclosing = classFile.getOuterClassFile(); enclosing != null; enclosing = enclosing.getOuterClassFile()) {
+            TypeTypes enclosingTypeTypes = makeTypeTypes(enclosing.getInternalTypeName());
+            ObjectType type = (enclosingTypeTypes == null) ? null : enclosingTypeTypes.superType;
+
+            for (int depth = 0; (type != null) && (depth < 20); depth++) {
+                if (type.getInternalName().equals(outerInternalTypeName)) {
+                    if (type.getTypeArguments() == null) {
+                        return superType;
+                    }
+                    return new InnerObjectType(innerSuperType.getInternalName(), innerSuperType.getQualifiedName(), innerSuperType.getName(), type);
+                }
+
+                TypeTypes typeTypes = makeTypeTypes(type.getInternalName());
+                type = (typeTypes == null) ? null : typeTypes.superType;
+            }
+
+            if (enclosing.isStatic()) {
+                break;
+            }
+        }
+
+        return superType;
+    }
+
+    private static boolean isNonStaticInnerClass(ClassFile classFile, String internalTypeName) {
+        AttributeInnerClasses attribute = classFile.getAttribute("InnerClasses");
+
+        if (attribute != null) {
+            for (InnerClass innerClass : attribute.getInnerClasses()) {
+                if (internalTypeName.equals(innerClass.getInnerTypeName())) {
+                    return (innerClass.getInnerAccessFlags() & org.jd.core.v1.model.classfile.Constants.ACC_STATIC) == 0;
+                }
+            }
+        }
+
+        return false;
     }
 
     public MethodTypes parseMethodSignature(ClassFile classFile, Method method) {
