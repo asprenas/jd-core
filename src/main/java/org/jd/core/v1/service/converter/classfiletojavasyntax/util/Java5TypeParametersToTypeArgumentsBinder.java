@@ -475,8 +475,10 @@ public class Java5TypeParametersToTypeArgumentsBinder extends AbstractTypeParame
                     unboundParameterTypes = parameterTypes;
                     unboundType = mie.getType();
 
+                    Type erasedReturnedType = getRawMemberReturnedType(exp, typeParameters, mie.getType());
+
                     mie.setParameterTypes(parameterTypes = bind(bindings, parameterTypes));
-                    mie.setType((Type) bind(bindings, mie.getType()));
+                    mie.setType((erasedReturnedType != null) ? erasedReturnedType : (Type) bind(bindings, mie.getType()));
 
                     if ((methodTypeParameters != null) && (parameters == null) && !partialBinding && isTypeBoundViolated(methodTypeParameters, bindings)) {
                         // '<C extends Comparable> Ordering<C> natural()' with the target type 'Ordering<E>': 'E' is not
@@ -639,6 +641,30 @@ public class Java5TypeParametersToTypeArgumentsBinder extends AbstractTypeParame
         }
 
         return false;
+    }
+
+    /**
+     * 'entries[i].getKey()' with 'Map.Entry[] entries' in '&lt;K, V&gt; copyOf(...)' (no local variable table): the member
+     * of a raw type is erased, the type parameter 'K' of 'Map.Entry' is not the type variable 'K' of the context.
+     *
+     * @return the erasure of the returned type, or null
+     */
+    protected Type getRawMemberReturnedType(Expression receiver, BaseTypeParameter typeParameters, Type returnedType) {
+        if ((receiver == null) || (typeParameters == null) || !returnedType.isGenericType() || (returnedType.getDimension() != 0) ||
+                !(receiver.isLocalVariableReferenceExpression() || receiver.isArrayExpression()) ||
+                !receiver.getType().isObjectType() || (((ObjectType)receiver.getType()).getTypeArguments() != null) ||
+                !contextualBindings.containsKey(returnedType.getName())) {
+            return null;
+        }
+
+        for (TypeParameter typeParameter : (typeParameters.isList() ? (TypeParameters)typeParameters : Collections.singletonList((TypeParameter)typeParameters.getFirst()))) {
+            if (typeParameter.getIdentifier().equals(returnedType.getName())) {
+                BaseType bound = (typeParameter instanceof TypeParameterWithTypeBounds) ? ((TypeParameterWithTypeBounds)typeParameter).getTypeBounds() : null;
+                return ((bound != null) && !bound.isList() && bound.isObjectType()) ? ((ObjectType)bound).createType(null) : TYPE_OBJECT;
+            }
+        }
+
+        return null;
     }
 
     /** @return true if each type parameter of the generic method is in the type of a parameter */
