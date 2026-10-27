@@ -364,6 +364,45 @@ public class AddCastExpressionVisitor extends AbstractJavaSyntaxVisitor {
         return erasedTypes.isList() ? erasedTypes.getList().get(index) : erasedTypes.getFirst();
     }
 
+    /** @return true if the parameter needs a cast to the erasure of the parameter type of the invoked generic method */
+    private static boolean isErasedParameterCast(Type type, Type erasedType, Expression expression) {
+        return (erasedType != null) && erasedType.isObjectType() && type.isObjectType() && !expression.isNullExpression() &&
+               expression.getType().isObjectType() && !((ObjectType)erasedType).rawEquals((ObjectType)type) &&
+               !((ObjectType)erasedType).rawEquals((ObjectType)expression.getType());
+    }
+
+    /**
+     * '(StringBuffer)applyRules(c, (Appendable)buf)' with '&lt;B extends Appendable&gt; B applyRules(Calendar, B)': a parameter
+     * cast to its erasure binds the type parameter of the returned type to the erasure, the invocation takes the erased
+     * returned type of the descriptor.
+     */
+    private void updateErasedReturnedType(ClassFileMethodInvocationExpression expression) {
+        BaseExpression parameters = expression.getParameters();
+
+        if ((expression.getTypeParameters() == null) || (parameters == null) || (parameters.size() == 0) || !expression.getType().isObjectType()) {
+            return;
+        }
+        if ((typeMaker.matchCount(expression.getInternalTypeName(), expression.getName(), parameters.size(), false) <= 1) ||
+                (typeMaker.matchCount(typeBounds, expression.getInternalTypeName(), expression.getName(), parameters, false) <= 1)) {
+            return;
+        }
+
+        TypeMaker.MethodTypes methodTypes = typeMaker.makeMethodTypes(expression.getDescriptor());
+        BaseType types = expression.getParameterTypes();
+
+        for (int i = 0; i < parameters.size(); i++) {
+            Type type = types.isList() ? types.getList().get(i) : types.getFirst();
+            Expression parameter = parameters.isList() ? parameters.getList().get(i) : parameters.getFirst();
+
+            if (isErasedParameterCast(type, erasedType(methodTypes.parameterTypes, i), parameter)) {
+                if (methodTypes.returnedType.isObjectType() && !((ObjectType)methodTypes.returnedType).rawEquals((ObjectType)expression.getType())) {
+                    expression.setType(methodTypes.returnedType);
+                }
+                return;
+            }
+        }
+    }
+
     private Expression updateParameter(Type type, Type erasedType, Expression expression, boolean forceCast, boolean unique) {
         if (!unique && (erasedType != null) && erasedType.isObjectType() && type.isObjectType() && isWrapperType((ObjectType)type) &&
                 !erasedType.equals(type) && isBoxing(expression)) {
@@ -374,6 +413,15 @@ public class AddCastExpressionVisitor extends AbstractJavaSyntaxVisitor {
             searchFirstLineNumberVisitor.init();
             expression.accept(searchFirstLineNumberVisitor);
             return new CastExpression(searchFirstLineNumberVisitor.getLineNumber(), erasedType, parameter);
+        }
+
+        if (forceCast && isErasedParameterCast(type, erasedType, expression)) {
+            // 'appendTo((Appendable)builder, parts)' with '<A extends Appendable> appendTo(A, Iterator)' and
+            // 'appendTo(StringBuilder, Iterator)': the type parameter bound to 'StringBuilder' would select the other overload
+            expression.accept(this);
+            searchFirstLineNumberVisitor.init();
+            expression.accept(searchFirstLineNumberVisitor);
+            return new CastExpression(searchFirstLineNumberVisitor.getLineNumber(), erasedType, expression);
         }
 
         expression = updateExpression(type, expression, forceCast, unique);
@@ -407,6 +455,10 @@ public class AddCastExpressionVisitor extends AbstractJavaSyntaxVisitor {
                 expression = new CastExpression(searchFirstLineNumberVisitor.getLineNumber(), type, expression);
             }
         } else {
+            if (expression instanceof ClassFileMethodInvocationExpression) {
+                updateErasedReturnedType((ClassFileMethodInvocationExpression)expression);
+            }
+
             Type expressionType = expression.getType();
 
             if (type.isObjectType() && (((ObjectType)type).getTypeArguments() != null) && expression.isMethodInvocationExpression() &&
@@ -473,6 +525,10 @@ public class AddCastExpressionVisitor extends AbstractJavaSyntaxVisitor {
 
             if (expression.isCastExpression() && (((CastExpression)expression).getTypeAnnotationReferences() == null)) {
                 // An annotated cast '(@A String)o' is kept
+                if (expression.getExpression() instanceof ClassFileMethodInvocationExpression) {
+                    updateErasedReturnedType((ClassFileMethodInvocationExpression)expression.getExpression());
+                }
+
                 Type ceExpressionType = expression.getExpression().getType();
 
                 if (type.isObjectType() && ceExpressionType.isObjectType()) {
