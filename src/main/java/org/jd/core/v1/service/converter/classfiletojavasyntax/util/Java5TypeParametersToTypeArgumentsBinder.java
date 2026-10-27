@@ -116,7 +116,10 @@ public class Java5TypeParametersToTypeArgumentsBinder extends AbstractTypeParame
         if (expressionType.isObjectType()) {
             ObjectType expressionObjectType = (ObjectType) expressionType;
 
-            if (staticMethod || !expressionObjectType.getInternalName().equals(internalTypeName)) {
+            // 'inverse.delegate' with 'AbstractBiMap<V, K> inverse' in 'AbstractBiMap<K, V>': the field of another instance
+            // of the current type is bound with the type arguments of this instance
+            if (staticMethod || !expressionObjectType.getInternalName().equals(internalTypeName) ||
+                    (!expression.isThisExpression() && (expressionObjectType.getTypeArguments() != null))) {
                 if (type.isObjectType()) {
                     ObjectType ot = (ObjectType) type;
 
@@ -454,6 +457,11 @@ public class Java5TypeParametersToTypeArgumentsBinder extends AbstractTypeParame
                         }
                     } else {
                         typeArguments = ((ObjectType)expressionType).getTypeArguments();
+
+                        if ((typeArguments == null) && (typeParameters != null) && isOuterThisReference(exp)) {
+                            // 'StandardTable.this.column((C)key)': the outer instance has the type variables of its type
+                            typeArguments = toTypeArguments(typeParameters);
+                        }
                     }
 
                     Type t = mie.getType();
@@ -667,6 +675,21 @@ public class Java5TypeParametersToTypeArgumentsBinder extends AbstractTypeParame
         }
 
         return null;
+    }
+
+    protected static boolean isOuterThisReference(Expression expression) {
+        return expression.isFieldReferenceExpression() && expression.getName().startsWith("this$") && expression.getType().isObjectType();
+    }
+
+    protected static BaseTypeArgument toTypeArguments(BaseTypeParameter typeParameters) {
+        if (typeParameters.isList()) {
+            TypeArguments typeArguments = new TypeArguments(typeParameters.size());
+            for (TypeParameter typeParameter : (TypeParameters)typeParameters) {
+                typeArguments.add(new GenericType(typeParameter.getIdentifier()));
+            }
+            return typeArguments;
+        }
+        return new GenericType(typeParameters.getFirst().getIdentifier());
     }
 
     protected static boolean containsInvocationOnWildcardType(BaseExpression parameters) {
