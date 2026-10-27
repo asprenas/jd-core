@@ -486,6 +486,38 @@ public class LoopStatementMaker {
     }
 
     /** @return true if a receiver of the method invocations is typed with wildcards ('Multimap<? extends K, ? extends V>') */
+    /**
+     * 'for (Entry&lt;?&gt; element : this)' in 'class EntrySet extends ImmutableSet&lt;Entry&lt;E&gt;&gt;': the type without type
+     * arguments is an 'Iterable' parameterized by a super type, the element fits the item without cast
+     */
+    protected static boolean isSuperIterableAssignable(Map<String, BaseType> typeBounds, TypeMaker typeMaker, ObjectType listType, Type itemType) {
+        if ((typeMaker == null) || !itemType.isObjectType()) {
+            return false;
+        }
+
+        ObjectType iterableType = typeMaker.searchSuperParameterizedType(TYPE_ITERABLE, listType);
+
+        if ((iterableType != null) && (iterableType.getTypeArguments() == null)) {
+            // The type variables of the super type of a not generic inner type are the ones of the outer type: search from
+            // the super type
+            TypeMaker.TypeTypes typeTypes = typeMaker.makeTypeTypes(listType.getInternalName());
+
+            if ((typeTypes != null) && (typeTypes.typeParameters == null) && (typeTypes.superType != null)) {
+                iterableType = typeMaker.searchSuperParameterizedType(TYPE_ITERABLE, typeTypes.superType);
+            }
+        }
+
+        if ((iterableType == null) || (iterableType == listType) || (iterableType.getTypeArguments() == null)) {
+            return false;
+        }
+
+        CreateTypeFromTypeArgumentVisitor visitor = new CreateTypeFromTypeArgumentVisitor();
+        iterableType.getTypeArguments().accept(visitor);
+        Type elementType = visitor.getType();
+
+        return (elementType != null) && elementType.isObjectType() && typeMaker.isAssignable(typeBounds, (ObjectType)itemType, (ObjectType)elementType);
+    }
+
     protected static boolean isInvocationOnWildcardType(Expression expression) {
         while (expression.isMethodInvocationExpression()) {
             expression = expression.getExpression();
@@ -621,7 +653,7 @@ public class LoopStatementMaker {
             ObjectType listType = (ObjectType)type;
 
             if (listType.getTypeArguments() == null) {
-                if (!TYPE_OBJECT.equals(item.getType())) {
+                if (!TYPE_OBJECT.equals(item.getType()) && !isSuperIterableAssignable(typeBounds, localVariableMaker.getTypeMaker(), listType, item.getType())) {
                     if (list.isNewExpression()) {
                         ClassFileNewExpression ne = (ClassFileNewExpression)list;
                         ne.setType(listType.createType(DiamondTypeArgument.DIAMOND));
