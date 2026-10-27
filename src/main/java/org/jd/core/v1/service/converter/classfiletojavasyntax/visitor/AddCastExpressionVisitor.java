@@ -260,9 +260,85 @@ public class AddCastExpressionVisitor extends AbstractJavaSyntaxVisitor {
             BaseType erasedTypes = (methodTypeParameters == null) ? null : typeMaker.makeMethodTypes(expression.getDescriptor()).parameterTypes;
             expression.setParameters(updateParameters(((ClassFileMethodInvocationExpression)expression).getParameterTypes(), erasedTypes, parameters, forceCast, unique));
             methodTypeParameters = mtp;
+            addCaptureRawCasts((ClassFileMethodInvocationExpression)expression);
         }
-        
+
         expression.getExpression().accept(this);
+    }
+
+    /**
+     * 'bound.getSupertype((Class)supertype)' with 'TypeToken&lt;? super T&gt; bound' and 'getSupertype(Class&lt;? super T&gt;)': the
+     * type argument of the receiver is a capture, a parameterized argument can not fit the parameter, only a raw cast does.
+     */
+    private void addCaptureRawCasts(ClassFileMethodInvocationExpression expression) {
+        Type receiverType = expression.getExpression().getType();
+
+        if (!receiverType.isObjectType() || !containsWildcard(((ObjectType)receiverType).getTypeArguments())) {
+            return;
+        }
+
+        TypeMaker.TypeTypes typeTypes = typeMaker.makeTypeTypes(((ObjectType)receiverType).getInternalName());
+
+        if ((typeTypes == null) || (typeTypes.typeParameters == null)) {
+            return;
+        }
+
+        java.util.HashSet<String> names = new java.util.HashSet<>();
+
+        for (TypeParameter typeParameter : typeTypes.typeParameters.isList() ? (TypeParameters)typeTypes.typeParameters : java.util.Collections.singletonList((TypeParameter)typeTypes.typeParameters.getFirst())) {
+            names.add(typeParameter.getIdentifier());
+        }
+
+        BaseExpression parameters = expression.getParameters();
+        BaseType types = expression.getParameterTypes();
+
+        for (int i = 0; i < parameters.size(); i++) {
+            Type type = types.isList() ? types.getList().get(i) : types.getFirst();
+            Expression parameter = parameters.isList() ? parameters.getList().get(i) : parameters.getFirst();
+
+            if (type.isObjectType() && containsTypeVariable(((ObjectType)type).getTypeArguments(), names) &&
+                    parameter.getType().isObjectType() && (((ObjectType)parameter.getType()).getTypeArguments() != null) && !parameter.isCastExpression()) {
+                searchFirstLineNumberVisitor.init();
+                parameter.accept(searchFirstLineNumberVisitor);
+                Expression cast = new CastExpression(searchFirstLineNumberVisitor.getLineNumber(), ((ObjectType)type).createType(null), parameter);
+
+                if (parameters.isList()) {
+                    parameters.getList().set(i, cast);
+                } else {
+                    expression.setParameters(cast);
+                }
+            }
+        }
+    }
+
+    private static boolean containsWildcard(BaseTypeArgument typeArguments) {
+        if (typeArguments == null) {
+            return false;
+        }
+        for (TypeArgument typeArgument : typeArguments.isTypeArgumentList() ? typeArguments.getTypeArgumentList() : java.util.Collections.singletonList(typeArguments.getTypeArgumentFirst())) {
+            if ((typeArgument == WildcardTypeArgument.WILDCARD_TYPE_ARGUMENT) || (typeArgument instanceof WildcardSuperTypeArgument) || (typeArgument instanceof WildcardExtendsTypeArgument)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** @return true if a type argument is, or bounds a wildcard with, one of the type variables */
+    private static boolean containsTypeVariable(BaseTypeArgument typeArguments, java.util.Set<String> names) {
+        if (typeArguments == null) {
+            return false;
+        }
+        for (TypeArgument typeArgument : typeArguments.isTypeArgumentList() ? typeArguments.getTypeArgumentList() : java.util.Collections.singletonList(typeArguments.getTypeArgumentFirst())) {
+            if (typeArgument instanceof WildcardSuperTypeArgument) {
+                typeArgument = ((WildcardSuperTypeArgument)typeArgument).getType();
+            } else if (typeArgument instanceof WildcardExtendsTypeArgument) {
+                typeArgument = ((WildcardExtendsTypeArgument)typeArgument).getType();
+            }
+            if ((typeArgument instanceof GenericType) && names.contains(((GenericType)typeArgument).getName())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
