@@ -29,6 +29,33 @@ public class RemoveRedundantCastVisitor extends AbstractUpdateExpressionVisitor 
         return expression;
     }
 
+    @Override
+    public void visit(MethodInvocationExpression expression) {
+        super.visit(expression);
+
+        // '((TreeMultiset.Node)next.getTip()).getKey()' with 'next.getTip()' of type 'Node<E>': the raw cast of the
+        // receiver erases the returned type of the invoked method
+        Expression receiver = expression.getExpression();
+
+        if (receiver.isCastExpression() && isRawCastOfParameterizedType((CastExpression)receiver)) {
+            expression.setExpression(receiver.getExpression());
+        }
+    }
+
+    protected static boolean isRawCastOfParameterizedType(CastExpression ce) {
+        Expression operand = ce.getExpression();
+
+        if (!ce.isExplicit() || (ce.getTypeAnnotationReferences() != null) || !ce.getType().isObjectType() || !operand.getType().isObjectType() ||
+                (!operand.isMethodInvocationExpression() && !operand.isFieldReferenceExpression())) {
+            return false;
+        }
+
+        ObjectType castType = (ObjectType)ce.getType();
+        ObjectType operandType = (ObjectType)operand.getType();
+
+        return (castType.getTypeArguments() == null) && (operandType.getTypeArguments() != null) && castType.rawEquals(operandType);
+    }
+
     protected static boolean isRedundantCast(Expression expression) {
         if (!expression.isCastExpression()) {
             return false;

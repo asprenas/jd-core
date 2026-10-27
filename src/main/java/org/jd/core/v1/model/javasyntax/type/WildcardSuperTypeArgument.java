@@ -26,7 +26,9 @@ public class WildcardSuperTypeArgument implements TypeArgument {
         if (typeArgument.isWildcardSuperTypeArgument()) {
             return type.isTypeArgumentAssignableFrom(typeBounds, typeArgument.getType());
         } else if (typeArgument instanceof Type) {
-            return type.isTypeArgumentAssignableFrom(typeBounds, typeArgument);
+            // '? super K' accepts the super types of 'K': 'CacheLoader<Object, V>' for 'CacheLoader<? super K, V>'
+            return type.isTypeArgumentAssignableFrom(typeBounds, typeArgument) || ObjectType.TYPE_OBJECT.equals(typeArgument) ||
+                   ((Type)typeArgument).isTypeArgumentAssignableFrom(typeBounds, type);
         }
 
         return false;

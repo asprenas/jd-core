@@ -8,6 +8,9 @@
 package org.jd.core.v1.service.converter.classfiletojavasyntax.model.localvariable;
 
 import org.jd.core.v1.model.javasyntax.type.BaseType;
+import org.jd.core.v1.model.javasyntax.type.BaseTypeArgument;
+import org.jd.core.v1.model.javasyntax.type.TypeArgument;
+import org.jd.core.v1.model.javasyntax.type.WildcardTypeArgument;
 import org.jd.core.v1.model.javasyntax.type.ObjectType;
 import org.jd.core.v1.model.javasyntax.type.Type;
 import org.jd.core.v1.service.converter.classfiletojavasyntax.util.TypeMaker;
@@ -95,11 +98,42 @@ public class ObjectLocalVariable extends AbstractLocalVariable {
             }
 
             if (type.isObjectType()) {
-                return typeMaker.isAssignable(typeBounds, (ObjectType) this.type, (ObjectType) type);
+                if (typeMaker.isAssignable(typeBounds, (ObjectType) this.type, (ObjectType) type)) {
+                    return true;
+                }
+                // 'comparator = (Comparator)NATURAL_ORDER' with 'Comparator<? super E> comparator' and
+                // 'Comparator<Comparable> NATURAL_ORDER': same raw type, the slot is one variable, a raw cast assigns it
+                return (this.type.getDimension() == type.getDimension()) &&
+                       ((ObjectType) this.type).getInternalName().equals(((ObjectType) type).getInternalName()) &&
+                       hasWildcardTypeArgument(((ObjectType) this.type).getTypeArguments()) && hasConcreteTypeArgumentsOnly(((ObjectType) type).getTypeArguments());
             }
         }
 
         return false;
+    }
+
+    private static boolean hasWildcardTypeArgument(BaseTypeArgument typeArguments) {
+        if (typeArguments == null) {
+            return false;
+        }
+        for (TypeArgument typeArgument : typeArguments.isTypeArgumentList() ? typeArguments.getTypeArgumentList() : java.util.Collections.singletonList(typeArguments.getTypeArgumentFirst())) {
+            if (typeArgument.isWildcardSuperTypeArgument() || typeArgument.isWildcardExtendsTypeArgument() || (typeArgument == WildcardTypeArgument.WILDCARD_TYPE_ARGUMENT)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasConcreteTypeArgumentsOnly(BaseTypeArgument typeArguments) {
+        if (typeArguments == null) {
+            return false;
+        }
+        for (TypeArgument typeArgument : typeArguments.isTypeArgumentList() ? typeArguments.getTypeArgumentList() : java.util.Collections.singletonList(typeArguments.getTypeArgumentFirst())) {
+            if (!typeArgument.isObjectTypeArgument() || (((ObjectType)typeArgument).getTypeArguments() != null)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     @Override
