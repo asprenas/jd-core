@@ -12,6 +12,7 @@ import org.jd.core.v1.api.printer.Printer;
 import org.jd.core.v1.model.classfile.ClassFile;
 import org.jd.core.v1.model.classfile.Constants;
 import org.jd.core.v1.model.classfile.attribute.AttributeInnerClasses;
+import org.jd.core.v1.model.classfile.attribute.AttributeSignature;
 import org.jd.core.v1.model.classfile.attribute.InnerClass;
 import org.jd.core.v1.model.javafragment.ImportsFragment;
 import org.jd.core.v1.model.javasyntax.AbstractJavaSyntaxVisitor;
@@ -63,6 +64,9 @@ public class TypeVisitor extends AbstractJavaSyntaxVisitor {
     protected String currentInternalTypeName;
     protected HashMap<String, TextToken> textTokenCache = new HashMap<>();
     protected HashMap<String, Boolean> nonStaticInnerTypes = new HashMap<>();
+    protected HashMap<String, Boolean> genericTypes = new HashMap<>();
+    /** Set while the type of an 'instanceof' is visited */
+    protected boolean qualifyRawInnerTypes;
 
     // Type annotations of the declared type being visited: 'typeAnnotationPath' is the JVMS 'type_path' of the visited type
     protected TypeAnnotationReferences typeAnnotationReferences;
@@ -247,6 +251,26 @@ public class TypeVisitor extends AbstractJavaSyntaxVisitor {
         visitAnnotatedDimension(type.getDimension(), path);
     }
 
+    protected boolean isGenericType(String internalTypeName) {
+        return genericTypes.computeIfAbsent(internalTypeName, this::loadGenericType);
+    }
+
+    /** The 'Signature' attribute of the class file gives its type parameters */
+    protected boolean loadGenericType(String internalTypeName) {
+        try {
+            if ((loader != null) && loader.canLoad(internalTypeName)) {
+                ClassFile classFile = new ClassFileDeserializer().loadClassFile(loader, internalTypeName);
+                AttributeSignature attribute = classFile.getAttribute("Signature");
+
+                return (attribute != null) && attribute.getSignature().startsWith("<");
+            }
+        } catch (Exception e) {
+            // Not loaded: supposed not generic
+        }
+
+        return false;
+    }
+
     protected boolean isNonStaticInnerType(String internalTypeName) {
         return nonStaticInnerTypes.computeIfAbsent(internalTypeName, this::loadNonStaticInnerType);
     }
@@ -285,7 +309,12 @@ public class TypeVisitor extends AbstractJavaSyntaxVisitor {
             ((typeAnnotationReferences.get(typeAnnotationTarget, typeAnnotationIndex, innerPath) != null) ||
              ((typeAnnotationReferences.get(typeAnnotationTarget, typeAnnotationIndex, elementPath) != null) && isNonStaticInnerType(type.getInternalName())));
 
-        if (nonStatic || (currentInternalTypeName == null) || (!currentInternalTypeName.equals(type.getInternalName()) && !currentInternalTypeName.equals(type.getOuterType().getInternalName()))) {
+        // 'obj instanceof CartesianSet.Axis': the simple name of a non-static inner type of a generic outer type would be
+        // the parameterized type 'CartesianSet<B>.Axis', not reifiable
+        boolean rawQualified = qualifyRawInnerTypes && (type.getTypeArguments() == null) && (type.getOuterType().getTypeArguments() == null) &&
+            isNonStaticInnerType(type.getInternalName()) && isGenericType(type.getOuterType().getInternalName());
+
+        if (nonStatic || rawQualified || (currentInternalTypeName == null) || (!currentInternalTypeName.equals(type.getInternalName()) && !currentInternalTypeName.equals(type.getOuterType().getInternalName()))) {
             BaseType outerType = type.getOuterType();
             TypeAnnotationReferences references = typeAnnotationReferences;
 
