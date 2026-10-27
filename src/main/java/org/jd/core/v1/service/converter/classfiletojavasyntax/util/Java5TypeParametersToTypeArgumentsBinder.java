@@ -490,7 +490,9 @@ public class Java5TypeParametersToTypeArgumentsBinder extends AbstractTypeParame
                         mie.setRawCast(true);
                     }
 
-                    if ((methodTypeParameters != null) && !partialBinding) {
+                    if ((methodTypeParameters != null) && !partialBinding && !containsInvocationOnWildcardType(parameters)) {
+                        // 'Iterables.getOnlyElement(table.cellSet())' with 'Table<? extends R, ? extends C, ? extends V> table':
+                        // the argument is typed by captures, an explicit type argument would not fit it
                         bindTypeParametersToNonWildcardTypeArgumentsVisitor.init(bindings);
                         methodTypeParameters.accept(bindTypeParametersToNonWildcardTypeArgumentsVisitor);
                         mie.setNonWildcardTypeArguments(bindTypeParametersToNonWildcardTypeArgumentsVisitor.getTypeArgument());
@@ -665,6 +667,17 @@ public class Java5TypeParametersToTypeArgumentsBinder extends AbstractTypeParame
         }
 
         return null;
+    }
+
+    protected static boolean containsInvocationOnWildcardType(BaseExpression parameters) {
+        if (parameters != null) {
+            for (Expression parameter : parameters) {
+                if (LoopStatementMaker.isInvocationOnWildcardType(parameter)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /** @return true if each type parameter of the generic method is in the type of a parameter */
