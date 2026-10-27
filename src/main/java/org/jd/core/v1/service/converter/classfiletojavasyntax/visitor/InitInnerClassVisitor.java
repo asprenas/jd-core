@@ -655,10 +655,69 @@ public class InitInnerClassVisitor extends AbstractJavaSyntaxVisitor {
                             }
                         }
                     }
+                } else if ((ne.getBodyDeclaration() == null) && isInheritedInnerTypeWithThis(ne)) {
+                    // 'new ImmutableMap.KeySet(keySetHashCode)' in a sub class of 'ImmutableMap': the outer instance is 'this'
+                    BaseExpression parameters = ne.getParameters();
+
+                    if (parameters.isList()) {
+                        parameters.getList().removeFirst();
+                        ne.getParameterTypes().getList().removeFirst();
+                    } else {
+                        ne.setParameters(null);
+                        ne.setParameterTypes(null);
+                    }
                 }
             }
 
             safeAccept(expression.getParameters());
+        }
+
+        /**
+         * @return true if the new expression creates a non-static inner type of a super type of the current type, declared in
+         * another class file, with 'this' as the explicit outer instance
+         */
+        protected boolean isInheritedInnerTypeWithThis(ClassFileNewExpression ne) {
+            ObjectType type = ne.getObjectType();
+            BaseExpression parameters = ne.getParameters();
+
+            if (!type.isInnerObjectType() || (parameters == null) || (parameters.size() == 0) || !parameters.getFirst().isThisExpression()) {
+                return false;
+            }
+
+            ClassFile currentClassFile = bodyDeclaration.getClassFile();
+            org.jd.core.v1.model.classfile.attribute.AttributeInnerClasses attribute = currentClassFile.getAttribute("InnerClasses");
+            boolean nonStatic = false;
+
+            if (attribute != null) {
+                for (org.jd.core.v1.model.classfile.attribute.InnerClass innerClass : attribute.getInnerClasses()) {
+                    if (type.getInternalName().equals(innerClass.getInnerTypeName())) {
+                        nonStatic = (innerClass.getInnerAccessFlags() & org.jd.core.v1.model.classfile.Constants.ACC_STATIC) == 0;
+                        break;
+                    }
+                }
+            }
+
+            ObjectType outerType = ((org.jd.core.v1.model.javasyntax.type.InnerObjectType)type).getOuterType();
+            Type firstParameterType = ne.getParameterTypes().getFirst();
+
+            return nonStatic && !outerType.getInternalName().equals(currentClassFile.getInternalTypeName()) &&
+                   firstParameterType.isObjectType() && ((ObjectType)firstParameterType).getInternalName().equals(outerType.getInternalName()) &&
+                   typeMaker.isRawTypeAssignable(outerType, typeMaker.makeFromInternalTypeName(currentClassFile.getInternalTypeName()));
+        }
+
+        /** The 'InnerClasses' attribute of the class file gives the flags of the inner super type */
+        protected boolean isStaticInnerType(String internalTypeName) {
+            org.jd.core.v1.model.classfile.attribute.AttributeInnerClasses attribute = classFile.getAttribute("InnerClasses");
+
+            if (attribute != null) {
+                for (org.jd.core.v1.model.classfile.attribute.InnerClass innerClass : attribute.getInnerClasses()) {
+                    if (internalTypeName.equals(innerClass.getInnerTypeName())) {
+                        return (innerClass.getInnerAccessFlags() & org.jd.core.v1.model.classfile.Constants.ACC_STATIC) != 0;
+                    }
+                }
+            }
+
+            return false;
         }
 
         @Override
@@ -673,7 +732,9 @@ public class InitInnerClassVisitor extends AbstractJavaSyntaxVisitor {
                 if (firstParameterType.isObjectType() && !classFile.isStatic() && (bodyDeclaration.getOuterTypeFieldName() != null)) {
                     TypeMaker.TypeTypes superTypeTypes = typeMaker.makeTypeTypes(classFile.getSuperTypeName());
 
-                    if ((superTypeTypes != null) && superTypeTypes.thisType.isInnerObjectType()) {
+                    // 'super(ImmutableMap.this.entrySet())' with the static nested super type 'ImmutableSet.TransformedImmutableSet':
+                    // no outer instance is passed
+                    if ((superTypeTypes != null) && superTypeTypes.thisType.isInnerObjectType() && !isStaticInnerType(classFile.getSuperTypeName())) {
                         if (typeMaker.isRawTypeAssignable(superTypeTypes.thisType.getOuterType(), (ObjectType)firstParameterType)) {
                             scie.setParameters(removeFirstItem(parameters));
                             scie.setParameterTypes(removeFirstItem(scie.getParameterTypes()));
