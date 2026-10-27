@@ -450,7 +450,9 @@ public class TypeMaker {
 
                 Type bound = parseReferenceTypeSignature(reader);
 
-                if ((bound != null) && !bound.getDescriptor().equals("Ljava/lang/Object;")) {
+                // Keep an explicit 'Object' class bound only when interface bounds follow ('I extends Object & Iterable<?>'):
+                // it sets the erasure of the type parameter
+                if ((bound != null) && (!bound.getDescriptor().equals("Ljava/lang/Object;") || reader.nextEqualsTo(':'))) {
                     if (firstBound == null) {
                         firstBound = bound;
                     } else if (types == null) {
@@ -1878,6 +1880,12 @@ public class TypeMaker {
             ObjectType ot1 = (ObjectType)leftType;
             ObjectType ot2 = (ObjectType)rightType;
             return isAssignable(typeBounds, ot1, ot2);
+        }
+
+        if (leftType.isGenericType() && (leftType.getDimension() == 0) && rightType.isObjectType() &&
+                ((typeBounds == null) || !typeBounds.containsKey(leftType.getName()))) {
+            // '<A extends Appendable> appendTo(A, ...)': the type parameter of the declared method may be bound to the argument
+            return true;
         }
 
         return false;
