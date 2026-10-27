@@ -312,7 +312,9 @@ public class ExpressionVisitor extends TypeVisitor {
             BaseType type = expression.getInstanceOfType();
 
             // 'o instanceof @A String'
+            qualifyRawInnerTypes = true;
             visitAnnotatedType(type, expression.getTypeAnnotationReferences(), TypeAnnotationReferences.INSTANCEOF, 0, "");
+            qualifyRawInnerTypes = false;
         }
     }
 

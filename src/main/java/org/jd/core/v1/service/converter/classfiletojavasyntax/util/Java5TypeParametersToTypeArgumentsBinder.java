@@ -482,6 +482,10 @@ public class Java5TypeParametersToTypeArgumentsBinder extends AbstractTypeParame
                         // '<C extends Comparable> Ordering<C> natural()' with the target type 'Ordering<E>': 'E' is not
                         // a 'Comparable', 'C' must not be inferred from the target type
                         mie.setRawCast(true);
+                    } else if ((methodTypeParameters != null) && (parameters == null) && isReceiverTypeBoundViolated(exp, type)) {
+                        // '(Comparator)Ordering.natural().reverse()' with the target type 'Comparator<? super E>': 'C' of
+                        // 'natural()' is not inferred from the target type, 'E' is not a 'Comparable'
+                        mie.setRawCast(true);
                     }
 
                     if ((methodTypeParameters != null) && !partialBinding) {
@@ -575,6 +579,62 @@ public class Java5TypeParametersToTypeArgumentsBinder extends AbstractTypeParame
             if ((genericType.getDimension() == 0) && ((genericTypeBounds == null) || genericTypeBounds.isList() || !genericTypeBounds.isObjectType() ||
                     !typeMaker.isRawTypeAssignable(bound, (ObjectType)genericTypeBounds))) {
                 return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return true if the receiver is a generic method invocation typed by one of its own type parameters ('Ordering&lt;C&gt;'
+     * of '&lt;C extends Comparable&gt; natural()') and a type variable of the target type does not fit the bound of it
+     */
+    protected boolean isReceiverTypeBoundViolated(Expression receiver, Type type) {
+        if (!(receiver instanceof ClassFileMethodInvocationExpression) || !type.isObjectType()) {
+            return false;
+        }
+
+        ClassFileMethodInvocationExpression receiverMie = (ClassFileMethodInvocationExpression)receiver;
+        BaseTypeParameter receiverTypeParameters = receiverMie.getTypeParameters();
+        Type receiverType = receiverMie.getType();
+
+        if ((receiverTypeParameters == null) || (receiverMie.getParameters() != null) || !receiverType.isObjectType()) {
+            return false;
+        }
+
+        BaseTypeArgument receiverTypeArguments = ((ObjectType)receiverType).getTypeArguments();
+        BaseTypeArgument targetTypeArguments = ((ObjectType)type).getTypeArguments();
+
+        if ((receiverTypeArguments == null) || receiverTypeArguments.isTypeArgumentList() || (targetTypeArguments == null) || targetTypeArguments.isTypeArgumentList()) {
+            return false;
+        }
+
+        TypeArgument receiverTypeArgument = receiverTypeArguments.getTypeArgumentFirst();
+
+        if (!(receiverTypeArgument instanceof GenericType)) {
+            return false;
+        }
+
+        String name = ((GenericType)receiverTypeArgument).getName();
+
+        for (TypeParameter typeParameter : (receiverTypeParameters.isList() ? (TypeParameters)receiverTypeParameters : Collections.singletonList((TypeParameter)receiverTypeParameters.getFirst()))) {
+            if (name.equals(typeParameter.getIdentifier()) && (typeParameter instanceof TypeParameterWithTypeBounds)) {
+                BaseType bound = ((TypeParameterWithTypeBounds)typeParameter).getTypeBounds();
+                TypeArgument targetTypeArgument = targetTypeArguments.getTypeArgumentFirst();
+
+                if (targetTypeArgument instanceof WildcardSuperTypeArgument) {
+                    targetTypeArgument = ((WildcardSuperTypeArgument)targetTypeArgument).getType();
+                } else if (targetTypeArgument instanceof WildcardExtendsTypeArgument) {
+                    targetTypeArgument = ((WildcardExtendsTypeArgument)targetTypeArgument).getType();
+                }
+                if (bound.isList() || !bound.isObjectType() || !(targetTypeArgument instanceof GenericType) || (((GenericType)targetTypeArgument).getDimension() != 0)) {
+                    return false;
+                }
+
+                BaseType targetBound = contextualTypeBounds.get(((GenericType)targetTypeArgument).getName());
+
+                return (targetBound == null) || targetBound.isList() || !targetBound.isObjectType() ||
+                       !typeMaker.isRawTypeAssignable((ObjectType)bound, (ObjectType)targetBound);
             }
         }
 
