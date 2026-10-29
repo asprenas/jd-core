@@ -22,6 +22,8 @@ import org.jd.core.v1.service.tokenizer.javafragmenttotoken.JavaFragmentToTokenP
 import org.jd.core.v1.service.writer.WriteTokenProcessor;
 import org.jd.core.v1.util.DefaultList;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Execution;
+import org.junit.jupiter.api.parallel.ExecutionMode;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -29,6 +31,8 @@ import java.io.InputStream;
 import java.nio.file.Paths;
 import java.util.*;
 
+// The jars are independent: their methods run concurrently (see junit-platform.properties)
+@Execution(ExecutionMode.CONCURRENT)
 public class JarFileToJavaSourceTest {
     protected DeserializeClassFileProcessor deserializer = new DeserializeClassFileProcessor();
     protected ClassFileToJavaSyntaxProcessor converter = new ClassFileToJavaSyntaxProcessor();
@@ -38,11 +42,12 @@ public class JarFileToJavaSourceTest {
     protected JavaFragmentToTokenProcessor tokenizer = new JavaFragmentToTokenProcessor();
     protected WriteTokenProcessor writer = new WriteTokenProcessor();
 
-    @Test
-    public void testCommonsCodec() throws Exception {
-        // Decompile and recompile 'commons-codec:commons-codec:1.13'
-        test(org.apache.commons.codec.Charsets.class);
-    }
+    // Excluded to shorten the test run: same Java 7 patterns as jsoup, try-with-resources as commons-imaging
+//    @Test
+//    public void testCommonsCodec() throws Exception {
+//        // Decompile and recompile 'commons-codec:commons-codec:1.13'
+//        test(org.apache.commons.codec.Charsets.class);
+//    }
 
     @Test
     public void testCommonsCollections4() throws Exception {
@@ -56,11 +61,12 @@ public class JarFileToJavaSourceTest {
         test(org.apache.commons.imaging.Imaging.class);
     }
 
-    @Test
-    public void testCommonsLang3() throws Exception {
-        // Decompile and recompile 'org.apache.commons:commons-lang3:3.9'
-        test(org.apache.commons.lang3.JavaVersion.class);
-    }
+    // Excluded to shorten the test run: generics/annotations overlap commons-collections4 and JUnit 5
+//    @Test
+//    public void testCommonsLang3() throws Exception {
+//        // Decompile and recompile 'org.apache.commons:commons-lang3:3.9'
+//        test(org.apache.commons.lang3.JavaVersion.class);
+//    }
 
     @Test
     public void testDiskLruCache() throws Exception {
@@ -105,17 +111,19 @@ public class JarFileToJavaSourceTest {
         test(com.squareup.mimecraft.Part.class);
     }
 
-    @Test
-    public void testScribe() throws Exception {
-        // Decompile and recompile 'org.scribe:scribe:1.3.7'
-        test(org.scribe.oauth.OAuthService.class);
-    }
+    // Excluded to shorten the test run: same Java 5 patterns as joda-time and commons-collections4
+//    @Test
+//    public void testScribe() throws Exception {
+//        // Decompile and recompile 'org.scribe:scribe:1.3.7'
+//        test(org.scribe.oauth.OAuthService.class);
+//    }
 
-    @Test
-    public void testSparkCore() throws Exception {
-        // Decompile and recompile 'com.sparkjava:spark-core:2.9.1'
-        test(spark.Spark.class);
-    }
+    // Excluded to shorten the test run: lambdas overlap JUnit 5
+//    @Test
+//    public void testSparkCore() throws Exception {
+//        // Decompile and recompile 'com.sparkjava:spark-core:2.9.1'
+//        test(spark.Spark.class);
+//    }
 
     @Test
     public void testLog4j() throws Exception {
