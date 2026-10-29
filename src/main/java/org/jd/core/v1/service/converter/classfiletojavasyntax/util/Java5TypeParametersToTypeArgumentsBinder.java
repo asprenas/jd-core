@@ -20,6 +20,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -415,7 +416,10 @@ public class Java5TypeParametersToTypeArgumentsBinder extends AbstractTypeParame
                 // Not the generic methods ('FluentIterable.<V>of(values).transform(...)'): their type arguments
                 // are still inferred with the expected type
                 Type t = this.type;
-                this.type = TYPE_OBJECT;
+                // Except a chain started by a generic factory ('ImmutableMap.<String, ValueParser>builder().put(...).build()'):
+                // the explicit type arguments of the factory come from the target type, not from the first argument
+                BaseTypeArgument receiverTypeArguments = isStartedByGenericFactory(exp) ? getReceiverTypeArgumentsFromTargetType(mie, t) : null;
+                this.type = (receiverTypeArguments == null) ? TYPE_OBJECT : ((ObjectType)exp.getType()).createType(receiverTypeArguments);
                 exp.accept(this);
                 this.type = t;
             }
@@ -442,6 +446,8 @@ public class Java5TypeParametersToTypeArgumentsBinder extends AbstractTypeParame
                         Type t = getExpressionType((ClassFileMethodInvocationExpression) exp);
                         if ((t != null) && t.isObjectType()) {
                             typeArguments = ((ObjectType)t).getTypeArguments();
+                        } else if (isStartedByGenericFactory(exp)) {
+                            typeArguments = getReceiverTypeArgumentsFromTargetType(mie, type);
                         } else {
                             typeArguments = null;
                         }
@@ -568,6 +574,81 @@ public class Java5TypeParametersToTypeArgumentsBinder extends AbstractTypeParame
 
             mie.setBound(true);
         }
+    }
+
+    /** @return true for a chain of invocations started by a generic method without parameter ('ImmutableMap.builder()') */
+    protected static boolean isStartedByGenericFactory(Expression expression) {
+        while (expression.isMethodInvocationExpression()) {
+            ClassFileMethodInvocationExpression mie = (ClassFileMethodInvocationExpression)expression;
+
+            if (mie.getTypeParameters() != null) {
+                return (mie.getParameters() == null) && mie.getExpression().isObjectTypeReferenceExpression();
+            }
+
+            expression = mie.getExpression();
+        }
+
+        return false;
+    }
+
+    /**
+     * @return the type arguments of the receiver type of 'mie' given by the target type, if the returned type of 'mie' is
+     *         typed by all the type parameters of the receiver type ('ImmutableMap<K, V> build()' of 'Builder<K, V>' with the
+     *         target type 'ImmutableMap<String, ValueParser>' gives '<String, ValueParser>'), null otherwise
+     */
+    protected BaseTypeArgument getReceiverTypeArgumentsFromTargetType(ClassFileMethodInvocationExpression mie, Type targetType) {
+        if ((mie.getTypeParameters() != null) || !targetType.isObjectType() || !mie.getType().isObjectType() || !mie.getExpression().getType().isObjectType()) {
+            return null;
+        }
+
+        TypeMaker.TypeTypes typeTypes = typeMaker.makeTypeTypes(mie.getInternalTypeName());
+
+        if ((typeTypes == null) || (typeTypes.typeParameters == null)) {
+            return null;
+        }
+
+        ObjectType target = (ObjectType)targetType;
+        ObjectType returnedType = typeMaker.searchSuperParameterizedType(target, (ObjectType)mie.getType());
+
+        if ((returnedType == null) || !target.getInternalName().equals(returnedType.getInternalName()) ||
+                (target.getTypeArguments() == null) || (returnedType.getTypeArguments() == null)) {
+            return null;
+        }
+
+        BaseTypeArgument targetTypeArguments = target.getTypeArguments();
+        BaseTypeArgument returnedTypeArguments = returnedType.getTypeArguments();
+        List<TypeArgument> targetList = targetTypeArguments.isTypeArgumentList() ? targetTypeArguments.getTypeArgumentList() : Collections.singletonList(targetTypeArguments.getTypeArgumentFirst());
+        List<TypeArgument> returnedList = returnedTypeArguments.isTypeArgumentList() ? returnedTypeArguments.getTypeArgumentList() : Collections.singletonList(returnedTypeArguments.getTypeArgumentFirst());
+
+        if (targetList.size() != returnedList.size()) {
+            return null;
+        }
+
+        Map<String, TypeArgument> bindings = new HashMap<>();
+
+        for (int i = 0; i < returnedList.size(); i++) {
+            TypeArgument returnedTypeArgument = returnedList.get(i);
+            TypeArgument targetTypeArgument = targetList.get(i);
+
+            if ((returnedTypeArgument instanceof GenericType) && isFixed(targetTypeArgument)) {
+                bindings.put(((GenericType)returnedTypeArgument).getName(), targetTypeArgument);
+            }
+        }
+
+        BaseTypeParameter typeParameters = typeTypes.typeParameters;
+        TypeArguments receiverTypeArguments = new TypeArguments(typeParameters.size());
+
+        for (TypeParameter typeParameter : (typeParameters.isList() ? (TypeParameters)typeParameters : Collections.singletonList((TypeParameter)typeParameters.getFirst()))) {
+            TypeArgument typeArgument = bindings.get(typeParameter.getIdentifier());
+
+            if (typeArgument == null) {
+                return null;
+            }
+
+            receiverTypeArguments.add(typeArgument);
+        }
+
+        return (receiverTypeArguments.size() == 1) ? receiverTypeArguments.getFirst() : receiverTypeArguments;
     }
 
     /** @return true if a type parameter is bound to a type variable whose bound does not satisfy the type parameter bound */

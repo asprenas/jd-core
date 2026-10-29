@@ -152,6 +152,15 @@ public class ConvertClassFileProcessor implements Processor {
             typeBounds = Collections.emptyMap();
         }
 
+        BaseTypeParameter enclosingMethodTypeParameters = getEnclosingMethodTypeParameters(parser, classFile);
+
+        if (enclosingMethodTypeParameters != null) {
+            // A local or anonymous class of a generic method uses the type parameters of the method
+            // ('new BstBalancePolicy<N>() {...}' in '<K, N extends BstNode<K, N>> singleRebalancePolicy(...)')
+            populateBindingsWithTypeParameterVisitor.init(bindings=new HashMap<>(bindings), typeBounds=new HashMap<>(typeBounds));
+            enclosingMethodTypeParameters.accept(populateBindingsWithTypeParameterVisitor);
+        }
+
         if (typeParameters != null) {
             populateBindingsWithTypeParameterVisitor.init(bindings=new HashMap<>(bindings), typeBounds=new HashMap<>(typeBounds));
             typeParameters.accept(populateBindingsWithTypeParameterVisitor);
@@ -166,6 +175,25 @@ public class ConvertClassFileProcessor implements Processor {
         bodyDeclaration.setInnerTypeDeclarations(convertInnerTypes(parser, converter, classFile, bodyDeclaration));
 
         return bodyDeclaration;
+    }
+
+    /** @return the type parameters of the generic method enclosing a local or anonymous class, null otherwise */
+    protected static BaseTypeParameter getEnclosingMethodTypeParameters(TypeMaker parser, ClassFile classFile) {
+        AttributeEnclosingMethod enclosingMethod = classFile.getAttribute("EnclosingMethod");
+        ClassFile outerClassFile = classFile.getOuterClassFile();
+
+        if ((enclosingMethod == null) || (enclosingMethod.getMethodName() == null) || (outerClassFile == null) ||
+                !outerClassFile.getInternalTypeName().equals(enclosingMethod.getInternalTypeName()) || (outerClassFile.getMethods() == null)) {
+            return null;
+        }
+
+        for (Method method : outerClassFile.getMethods()) {
+            if (method.getName().equals(enclosingMethod.getMethodName()) && method.getDescriptor().equals(enclosingMethod.getMethodDescriptor())) {
+                return parser.parseMethodSignature(outerClassFile, method).typeParameters;
+            }
+        }
+
+        return null;
     }
 
     protected List<ClassFileFieldDeclaration> convertFields(TypeMaker parser, AnnotationConverter converter, ClassFile classFile) {
