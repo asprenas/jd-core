@@ -581,6 +581,11 @@ public class LocalVariableMaker {
     }
 
     public AbstractLocalVariable getLocalVariableInAssignment(Map<String, BaseType> typeBounds, int index, int offset, Type valueType) {
+        return getLocalVariableInAssignment(typeBounds, index, offset, valueType, false);
+    }
+
+    /** @param castValue true for a value cast by 'checkcast' */
+    public AbstractLocalVariable getLocalVariableInAssignment(Map<String, BaseType> typeBounds, int index, int offset, Type valueType, boolean castValue) {
         AbstractLocalVariable lv = searchLocalVariable(index, offset);
 
         if (lv == null) {
@@ -591,6 +596,9 @@ public class LocalVariableMaker {
         } else if (lv.isAssignableFrom(typeBounds, valueType) || isCompatible(lv, valueType)) {
             // Assignable, reduce type
             lv.typeOnRight(typeBounds, valueType);
+        } else if (isDebugVariableWithOtherTypeArguments(lv, valueType) || (castValue && isDebugVariableOfErasedValue(typeBounds, lv, valueType))) {
+            // 'SortedMap<Object, V> self = (SortedMap<Object, V>)this', 'C lower = (Comparable)Ordering.natural().max(...)':
+            // the variable of the LocalVariableTypeTable is kept, a cast is added
         } else if (!lv.getType().isGenericType() || (ObjectType.TYPE_OBJECT != valueType)) {
             // Not assignable -> Create a new local variable
             createLocalVariableVisitor.init(index, offset);
@@ -602,6 +610,30 @@ public class LocalVariableMaker {
         store(lv);
 
         return lv;
+    }
+
+    /** @return true for a variable of the LocalVariableTable whose raw type is assignable from the value, with other type arguments */
+    protected boolean isDebugVariableWithOtherTypeArguments(AbstractLocalVariable lv, Type valueType) {
+        if ((lv.getName() == null) || !lv.getType().isObjectType() || !valueType.isObjectType() || (lv.getType().getDimension() != valueType.getDimension())) {
+            return false;
+        }
+
+        ObjectType lvObjectType = (ObjectType)lv.getType();
+        ObjectType valueObjectType = (ObjectType)valueType;
+
+        return (lvObjectType.getTypeArguments() != null) && (valueObjectType.getTypeArguments() != null) &&
+            typeMaker.isRawTypeAssignable(lvObjectType, valueObjectType);
+    }
+
+    /** @return true for a variable of the LocalVariableTypeTable typed by a type variable, the value typed by the erasure of its bound */
+    protected boolean isDebugVariableOfErasedValue(Map<String, BaseType> typeBounds, AbstractLocalVariable lv, Type valueType) {
+        if ((lv.getName() == null) || !lv.getType().isGenericType() || (lv.getType().getDimension() != 0) || !valueType.isObjectType() || (valueType.getDimension() != 0)) {
+            return false;
+        }
+
+        BaseType bound = (typeBounds == null) ? null : typeBounds.get(lv.getType().getName());
+
+        return (bound != null) && !bound.isList() && bound.isObjectType() && typeMaker.isRawTypeAssignable((ObjectType)valueType, (ObjectType)bound);
     }
 
     public AbstractLocalVariable getLocalVariableInNullAssignment(int index, int offset, Type valueType) {

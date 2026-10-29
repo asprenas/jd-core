@@ -79,4 +79,40 @@ public class JavaGuavaRecompilationTest extends Java9InterfaceTest {
 
         assertTrue(source.contains("forwardCmp = (Comparator)Ordering.natural();"), "raw cast");
     }
+
+    @Test
+    public void genericFactoryTypeArgumentsFromTargetType() throws Exception {
+        // 'ImmutableMap.<String, ValueParser>builder().put(...)...build()' assigned to 'ImmutableMap<String, ValueParser>':
+        // not the type of the first 'put' argument
+        String source = decompile("com/google/common/cache/CacheBuilderSpec");
+
+        assertTrue(source.contains("VALUE_PARSERS = ImmutableMap.<String, ValueParser>builder().put("), "type arguments of the target type");
+    }
+
+    @Test
+    public void localVariableWithOtherTypeArgumentsKept() throws Exception {
+        // 'SortedMap<Object, V> self = (SortedMap<Object, V>)this': not 'ForwardingSortedMap<K, V> forwardingSortedMap = this'
+        String source = decompile("com/google/common/collect/ForwardingSortedMap");
+
+        assertTrue(source.contains("SortedMap<Object, V> self = (SortedMap)this;"), "variable of the local variable table");
+        assertTrue(source.contains("Iterator<Map.Entry<Object, V>> entryIterator = self.tailMap(key).entrySet().iterator();"), "no cast of the key");
+    }
+
+    @Test
+    public void localVariableTypedByTypeVariableKept() throws Exception {
+        // 'C lowerEndpoint = Ordering.natural().max(...)' with 'checkcast Comparable': not 'Comparable<Comparable> comparable1'
+        String source = decompile("com/google/common/collect/RegularContiguousSet");
+
+        assertTrue(source.contains("C lowerEndpoint = (C)Ordering.natural().max(first(), other.first());"), "variable of the local variable table");
+        assertTrue(source.contains("Ranges.closed(lowerEndpoint, upperEndpoint)"), "no cast of the arguments");
+    }
+
+    @Test
+    public void typeParametersOfEnclosingMethod() throws Exception {
+        // 'new BstBalancePolicy<N>() {...}' in '<K, N extends BstNode<K, N>> singleRebalancePolicy(...)': 'N' is not raw
+        String source = decompile("com/google/common/collect/BstCountBasedBalancePolicies");
+
+        assertTrue(source.contains("BstOperations.extractMax(left, nodeFactory, this);"), "no raw cast of the arguments");
+        assertTrue(source.contains("BstOperations.extractMin(right, nodeFactory, this);"), "no raw cast of the arguments");
+    }
 }

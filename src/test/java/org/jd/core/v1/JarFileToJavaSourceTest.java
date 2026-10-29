@@ -131,12 +131,19 @@ public class JarFileToJavaSourceTest {
         test(org.apache.log4j.Category.class);
     }
 
-    // TODO In progress
-//    @Test
-//    public void testGuava() throws Exception {
-//        // Decompile and recompile 'com.google.guava:guava:12.0'
-//        test(com.google.common.collect.Collections2.class);
-//    }
+    @Test
+    public void testGuava() throws Exception {
+        // Decompile and recompile 'com.google.guava:guava:12.0'
+        test(com.google.common.collect.Collections2.class,
+            // Out of scope: 'sun.misc.Unsafe' is not in the platform API of '--release'
+            "com/google/common/primitives/UnsignedBytes.class",
+            // Out of scope: 'TypeVariable.getAnnotatedBounds()' of Java 8 is not implemented by 'TypeVariableImpl'
+            "com/google/common/reflect/Types.class",
+            // Out of scope: the source does not compile with javac 8+ ('totalBeyondRangeToSide' needs explicit '<K, N>')
+            "com/google/common/collect/BstRangeOps.class",
+            // Unstable: the result depends on the classes compiled before ('binarySearch' with a capture)
+            "com/google/common/collect/NaturalOrdering.class");
+    }
 
     /** The jar of the decompiled classes: the package classes of 'module-info' */
     protected File jarFile;

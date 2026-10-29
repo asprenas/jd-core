@@ -1196,7 +1196,7 @@ public class ByteCodeParser {
             }
             return localVariableMaker.getLocalVariableInAssignment(typeBounds, index, offset, valueType);
         } else {
-            return localVariableMaker.getLocalVariableInAssignment(typeBounds, index, offset, valueType);
+            return localVariableMaker.getLocalVariableInAssignment(typeBounds, index, offset, valueType, value.isCastExpression());
         }
     }
 
