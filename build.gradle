@@ -67,6 +67,8 @@ tasks.named('compileTestJava') {
 tasks.named('test') {
     useJUnitPlatform()
     jvmArgs '-XX:-OmitStackTraceInFastThrow'
+    // JarFileToJavaSourceTest decompiles and recompiles several jars concurrently
+    maxHeapSize = '4g'
     // JavaLanguageVersionTest is enabled by this variable: changing it must not leave the task UP-TO-DATE
     inputs.property('JDCORE_SAMPLES', System.getenv('JDCORE_SAMPLES') ?: '')
 }
