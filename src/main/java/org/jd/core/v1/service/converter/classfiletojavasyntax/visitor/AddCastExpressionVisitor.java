@@ -312,6 +312,9 @@ public class AddCastExpressionVisitor extends AbstractJavaSyntaxVisitor {
             // The parameter types of the descriptor of a generic method: the bound type parameters may select another overload
             BaseType erasedTypes = (methodTypeParameters == null) ? null : typeMaker.makeMethodTypes(expression.getDescriptor()).parameterTypes;
             expression.setParameters(updateParameters(((ClassFileMethodInvocationExpression)expression).getParameterTypes(), erasedTypes, parameters, forceCast, unique));
+            if (declaredMethodTypes != null) {
+                addRawTypeArgumentRawCasts(expression, declaredMethodTypes.parameterTypes);
+            }
             methodTypeParameters = mtp;
             invokedMethodTypeParameters = imtp;
             unboundParameterTypes = upt;
@@ -365,6 +368,74 @@ public class AddCastExpressionVisitor extends AbstractJavaSyntaxVisitor {
                 }
             }
         }
+    }
+
+    /**
+     * 'Collections.binarySearch((List)sortedList, key)' with 'List&lt;? extends Comparable&gt; sortedList' and
+     * '&lt;T&gt; binarySearch(List&lt;? extends Comparable&lt;? super T&gt;&gt;, T)': a raw type argument of the argument can not
+     * fit the parameterized type argument of the parameter, the inference fails, only a raw cast does.
+     */
+    private void addRawTypeArgumentRawCasts(MethodInvocationExpression expression, BaseType declaredParameterTypes) {
+        BaseExpression parameters = expression.getParameters();
+
+        if ((declaredParameterTypes == null) || (declaredParameterTypes.size() != parameters.size())) {
+            return;
+        }
+
+        for (int i = 0; i < parameters.size(); i++) {
+            Type type = declaredParameterTypes.isList() ? declaredParameterTypes.getList().get(i) : declaredParameterTypes.getFirst();
+            Expression parameter = parameters.isList() ? parameters.getList().get(i) : parameters.getFirst();
+            Type parameterType = parameter.getType();
+
+            if (type.isObjectType() && parameterType.isObjectType() && !parameter.isCastExpression() && (type.getDimension() == 0) && (parameterType.getDimension() == 0) &&
+                    containsRawTypeArgumentForParameterized(((ObjectType)type).getTypeArguments(), ((ObjectType)parameterType).getTypeArguments())) {
+                searchFirstLineNumberVisitor.init();
+                parameter.accept(searchFirstLineNumberVisitor);
+                Expression cast = new CastExpression(searchFirstLineNumberVisitor.getLineNumber(), ((ObjectType)type).createType(null), parameter);
+
+                if (parameters.isList()) {
+                    parameters.getList().set(i, cast);
+                } else {
+                    expression.setParameters(cast);
+                }
+            }
+        }
+    }
+
+    /** @return true if a type argument of the argument is the raw type of a parameterized type argument of the parameter */
+    private static boolean containsRawTypeArgumentForParameterized(BaseTypeArgument parameterTypeArguments, BaseTypeArgument argumentTypeArguments) {
+        if ((parameterTypeArguments == null) || (argumentTypeArguments == null)) {
+            return false;
+        }
+
+        java.util.List<TypeArgument> parameterList = parameterTypeArguments.isTypeArgumentList() ? parameterTypeArguments.getTypeArgumentList() : java.util.Collections.singletonList(parameterTypeArguments.getTypeArgumentFirst());
+        java.util.List<TypeArgument> argumentList = argumentTypeArguments.isTypeArgumentList() ? argumentTypeArguments.getTypeArgumentList() : java.util.Collections.singletonList(argumentTypeArguments.getTypeArgumentFirst());
+
+        if (parameterList.size() != argumentList.size()) {
+            return false;
+        }
+
+        for (int i = 0; i < parameterList.size(); i++) {
+            TypeArgument p = unwrapWildcard(parameterList.get(i));
+            TypeArgument a = unwrapWildcard(argumentList.get(i));
+
+            if ((p instanceof ObjectType) && (a instanceof ObjectType) && (((ObjectType)p).getTypeArguments() != null) && (((ObjectType)a).getTypeArguments() == null) &&
+                    (((ObjectType)p).getDimension() == 0) && (((ObjectType)a).getDimension() == 0) &&
+                    ((ObjectType)p).getInternalName().equals(((ObjectType)a).getInternalName())) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static TypeArgument unwrapWildcard(TypeArgument typeArgument) {
+        if (typeArgument instanceof WildcardExtendsTypeArgument) {
+            return ((WildcardExtendsTypeArgument)typeArgument).getType();
+        } else if (typeArgument instanceof WildcardSuperTypeArgument) {
+            return ((WildcardSuperTypeArgument)typeArgument).getType();
+        }
+        return typeArgument;
     }
 
     private static boolean containsWildcard(BaseTypeArgument typeArguments) {
