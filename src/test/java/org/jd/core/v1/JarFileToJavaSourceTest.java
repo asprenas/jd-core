@@ -140,9 +140,7 @@ public class JarFileToJavaSourceTest {
             // Out of scope: 'TypeVariable.getAnnotatedBounds()' of Java 8 is not implemented by 'TypeVariableImpl'
             "com/google/common/reflect/Types.class",
             // Out of scope: the source does not compile with javac 8+ ('totalBeyondRangeToSide' needs explicit '<K, N>')
-            "com/google/common/collect/BstRangeOps.class",
-            // Unstable: the result depends on the classes compiled before ('binarySearch' with a capture)
-            "com/google/common/collect/NaturalOrdering.class");
+            "com/google/common/collect/BstRangeOps.class");
     }
 
     /** The jar of the decompiled classes: the package classes of 'module-info' */

@@ -115,4 +115,13 @@ public class JavaGuavaRecompilationTest extends Java9InterfaceTest {
         assertTrue(source.contains("BstOperations.extractMax(left, nodeFactory, this);"), "no raw cast of the arguments");
         assertTrue(source.contains("BstOperations.extractMin(right, nodeFactory, this);"), "no raw cast of the arguments");
     }
+
+    @Test
+    public void rawCastOfRawTypeArgument() throws Exception {
+        // 'List<? extends Comparable> sortedList' for '<T> binarySearch(List<? extends Comparable<? super T>>, T)': the
+        // raw 'Comparable' does not fit 'Comparable<? super T>', the inference fails without a raw cast
+        String source = decompile("com/google/common/collect/NaturalOrdering");
+
+        assertTrue(source.contains("return Collections.binarySearch((List)sortedList, key);"), "raw cast");
+    }
 }
