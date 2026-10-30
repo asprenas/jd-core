@@ -126,6 +126,33 @@ decompiler.decompile(loader, printer, "path/to/YourClass");
 String source = printer.toString();
 ```
 
+## Configuration
+
+Options are given in a map to _"decompile(loader, printer, internalTypeName, configuration);"_.
+The boolean options are enabled with `Boolean.TRUE` or `"true"`, and are disabled when absent:
+
+| Key | Effect | Class files |
+|---|---|---|
+| `realignLineNumbers` | Realigns the source lines on the original line numbers | All |
+| `localVariableTypeInference` | Declares local variables with `var` | Java 10+ |
+| `textBlocks` | Prints multi-line string constants as text blocks | Java 15+ |
+| `unnamedVariables` | Prints unused variables and parameters as `_` | Java 22+ |
+| `repeatableAnnotations` | Prints the values of a container annotation as repeated annotations | Java 8+ |
+
+When the map is mutable, the decompiler stores its type cache under the key `typeMaker`: reuse the same map to
+decompile several classes of the same loader faster.
+```java
+Map<String, Object> configuration = new HashMap<>();
+configuration.put("realignLineNumbers", true);
+
+decompiler.decompile(loader, printer, "path/to/YourClass", configuration);
+```
+
+## API documentation
+
+The Javadoc of the public API (`org.jd.core.v1.api`, `ClassFileToJavaSourceDecompiler`) is built with
+`./gradlew javadoc` (in `build/docs/javadoc`), and is released as `jd-core-<version>-javadoc.jar`.
+
 ## Multi-release jar
 
 For a multi-release jar (JEP 238), wrap the loader of the jar entries in a

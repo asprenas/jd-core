@@ -7,12 +7,15 @@
 
 package org.jd.core.v1.api.loader;
 
-
+/** Error while reading a class file in a {@link Loader}. */
 public class LoaderException extends Exception {
     private static final long serialVersionUID = 9506606333927794L;
+    /** Creates an exception without message. */
     public LoaderException() {}
 
+    /** @param msg the message */
     public LoaderException(String msg) { super(msg); }
 
+    /** @param cause the cause, e.g. an {@link java.io.IOException} */
     public LoaderException(Throwable cause) { super(cause); }
 }

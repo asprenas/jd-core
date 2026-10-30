@@ -32,8 +32,10 @@ public class MultiReleaseLoader implements Loader {
         this.targetVersion = targetVersion;
     }
 
+    /** @return the loader of the jar entries */
     public Loader getDelegate() { return delegate; }
 
+    /** @return the Java feature version of the target runtime */
     public int getTargetVersion() { return targetVersion; }
 
     @Override
