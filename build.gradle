@@ -43,6 +43,15 @@ dependencies {
 
 java {
     withSourcesJar()
+    withJavadocJar()
+}
+
+tasks.named('javadoc') {
+    // Public API only: the comments of the internal classes are not written for Javadoc
+    include 'org/jd/core/v1/api/**'
+    include 'org/jd/core/v1/ClassFileToJavaSourceDecompiler.java'
+    options.memberLevel = JavadocMemberLevel.PUBLIC
+    options.encoding = 'UTF-8'
 }
 
 tasks.withType(JavaCompile).configureEach {

@@ -20,6 +20,9 @@ import org.jd.core.v1.service.writer.WriteTokenProcessor;
 
 import java.util.Map;
 
+/**
+ * Decompiler of a class file into Java source, see {@link Decompiler}.
+ */
 public class ClassFileToJavaSourceDecompiler implements Decompiler {
     protected DeserializeClassFileProcessor deserializer = new DeserializeClassFileProcessor();
     protected ClassFileToJavaSyntaxProcessor converter = new ClassFileToJavaSyntaxProcessor();
